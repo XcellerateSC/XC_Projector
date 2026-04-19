@@ -46,6 +46,20 @@ After sign-in, verify:
 - `/people` loads
 - your user shows as `portfolio_manager`
 
+### 5. Optional: load demo data
+
+If you want a more realistic walkthrough environment with staffed projects,
+timesheets and reporting signals, use:
+
+- [docs/DEMO_DATA.md](</C:/Users/stefa/OneDrive - Xcellerate GmbH/GitHub/XC_Projector/docs/DEMO_DATA.md>)
+- [supabase/sql/seed_demo_workspace.sql](</C:/Users/stefa/OneDrive - Xcellerate GmbH/GitHub/XC_Projector/supabase/sql/seed_demo_workspace.sql>)
+
+The larger demo setup now also includes:
+
+- automatic creation of 9 demo auth users through `npm.cmd run demo:users`
+- 1 existing PM user plus 2 project leads, 3 senior consultants, 4 consultants
+- 5 demo projects with mixed staffing, timesheet and reporting states
+
 ## Expected first test flow
 
 1. Log in as the promoted admin.

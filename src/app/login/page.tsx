@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { BrandLockup } from "@/components/brand-logo";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { login } from "./actions";
@@ -27,12 +28,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <main className="auth-shell">
       <section className="auth-card panel">
+        <BrandLockup className="auth-brand" priority size="md" />
+
         <div className="auth-copy">
           <span className="eyebrow">Secure sign-in</span>
-          <h1>Step into the planning cockpit.</h1>
+          <h1>Access planning, staffing and reporting in one workspace.</h1>
           <p>
-            Sign in with your Supabase account to access staffing, time
-            tracking and portfolio reporting.
+            Sign in to access project planning, transparent staffing, weekly
+            time capture and portfolio reporting in one connected application.
           </p>
         </div>
 

@@ -3,6 +3,13 @@ import { notFound, redirect } from "next/navigation";
 
 import { AllocationInput } from "@/components/allocation-input";
 import { AppFrame } from "@/components/app-frame";
+import {
+  formatProficiencyLabel,
+  formatRequirementLevel,
+  formatSkillOptionLabel,
+  type SkillOption,
+  type SkillRequirementLevel
+} from "@/lib/skills";
 import { buildPrimaryNav } from "@/lib/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -10,8 +17,19 @@ import {
   addStatusReportComment,
   createProjectAssignment,
   createProjectPosition,
+  endProjectAssignment,
+  reassignProjectAssignment,
+  removeBillingOverride,
+  removePositionSkillRequirement,
+  saveBillingOverride,
   saveStatusReportDraft,
-  submitStatusReport
+  savePositionSkillRequirement,
+  setProjectLifecycleStatus,
+  setProjectPositionActiveState,
+  submitStatusReport,
+  updateProjectAssignment,
+  updateProjectPosition,
+  updateProjectWorkspace
 } from "./actions";
 
 type ProjectDetailPageProps = {
@@ -39,6 +57,7 @@ type AssignmentWeekRow = {
 
 type AssignmentRow = {
   id: string;
+  profile_id: string;
   assigned_from: string;
   assigned_to: string | null;
   notes: string | null;
@@ -49,16 +68,35 @@ type AssignmentRow = {
   project_assignment_weeks: AssignmentWeekRow[] | null;
 };
 
+type SkillRow = {
+  id: string;
+  name: string;
+  skill_categories: {
+    name: string;
+  } | null;
+};
+
+type PositionSkillRequirementRow = {
+  id: string;
+  notes: string | null;
+  requirement_level: SkillRequirementLevel;
+  weight: number;
+  skills: SkillRow | null;
+};
+
 type PositionRow = {
   id: string;
   title: string;
   description: string | null;
+  professional_grade_id: string;
   start_date: string;
   end_date: string | null;
   rate_unit: string;
   rate_amount: number;
   currency_code: string;
+  is_active: boolean;
   professional_grades: { name: string } | null;
+  project_position_skill_requirements: PositionSkillRequirementRow[] | null;
   project_position_weeks: PositionWeekRow[] | null;
   project_assignments: AssignmentRow[] | null;
 };
@@ -74,6 +112,10 @@ type ProjectEmployeeRow = {
   id: string;
   full_name: string;
   system_role: string;
+  employee_skills: {
+    proficiency_score: number | null;
+    skills: SkillRow | null;
+  }[] | null;
 };
 
 type ConflictDetail = {
@@ -124,6 +166,52 @@ type FinancialTimeEntryRow = {
     | null;
 };
 
+type BillingManagementRow = {
+  id: string;
+  hours: number;
+  description: string;
+  weekly_timesheets: {
+    week_start: string;
+    status: string;
+    profiles: {
+      full_name: string;
+    } | null;
+  } | null;
+  project_assignments: {
+    id: string;
+    project_position_id: string;
+    profiles: {
+      full_name: string;
+    } | null;
+    project_positions: {
+      title: string;
+      projects: {
+        name: string;
+      } | null;
+    } | null;
+  } | null;
+  billing_overrides:
+    | {
+        id: string;
+        override_hours: number;
+        overridden_at: string;
+        reason: string | null;
+        profiles: {
+          full_name: string;
+        } | null;
+      }
+    | {
+        id: string;
+        override_hours: number;
+        overridden_at: string;
+        reason: string | null;
+        profiles: {
+          full_name: string;
+        } | null;
+      }[]
+    | null;
+};
+
 type PositionFinancialRow = {
   positionId: string;
   title: string;
@@ -137,6 +225,20 @@ type PositionFinancialRow = {
   actualCost: number;
   billableHours: number;
   billableCost: number;
+};
+
+type PositionMatchHint = {
+  employeeId: string;
+  fullName: string;
+  matchedPreferred: number;
+  matchedRequired: number;
+  matchPercent: number;
+  missingRequiredSkillNames: string[];
+  proficiencyAverage: number | null;
+  status: "strong" | "good" | "partial" | "missing";
+  systemRole: string;
+  totalPreferred: number;
+  totalRequired: number;
 };
 
 function firstRelation<T>(value: T | T[] | null | undefined) {
@@ -190,6 +292,19 @@ function formatPercent(value: number | null) {
 
 function formatHours(value: number) {
   return `${value.toFixed(1)}h`;
+}
+
+function formatMatchStatus(status: PositionMatchHint["status"]) {
+  switch (status) {
+    case "strong":
+      return "Strong fit";
+    case "good":
+      return "Viable fit";
+    case "partial":
+      return "Partial fit";
+    default:
+      return "No fit yet";
+  }
 }
 
 function toHourlyRate(rateUnit: string, rateAmount: number) {
@@ -255,10 +370,15 @@ export default async function ProjectDetailPage({
   const [
     { data: profile },
     { data: project },
+    { data: portfolios },
+    { data: programs },
+    { data: customers },
+    { data: clientUnits },
     { data: grades },
     { data: employees },
     { data: positions },
-    { data: statusReports }
+    { data: statusReports },
+    { data: skills }
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -274,6 +394,11 @@ export default async function ProjectDetailPage({
           code,
           description,
           lifecycle_status,
+          portfolio_id,
+          program_id,
+          customer_id,
+          client_unit_id,
+          internal_project_lead_id,
           start_date,
           end_date,
           portfolios (
@@ -305,6 +430,16 @@ export default async function ProjectDetailPage({
       )
       .eq("id", projectId)
       .maybeSingle(),
+    supabase.from("portfolios").select("id, name").order("name", { ascending: true }),
+    supabase
+      .from("programs")
+      .select("id, name, portfolio_id")
+      .order("name", { ascending: true }),
+    supabase.from("customers").select("id, name").order("name", { ascending: true }),
+    supabase
+      .from("client_units")
+      .select("id, name, customer_id")
+      .order("name", { ascending: true }),
     supabase
       .from("professional_grades")
       .select("id, name")
@@ -312,7 +447,23 @@ export default async function ProjectDetailPage({
       .order("sort_order", { ascending: true }),
     supabase
       .from("profiles")
-      .select("id, full_name, system_role")
+      .select(
+        `
+          id,
+          full_name,
+          system_role,
+          employee_skills (
+            proficiency_score,
+            skills (
+              id,
+              name,
+              skill_categories (
+                name
+              )
+            )
+          )
+        `
+      )
       .eq("is_active", true)
       .order("full_name", { ascending: true }),
     supabase
@@ -322,13 +473,28 @@ export default async function ProjectDetailPage({
           id,
           title,
           description,
+          professional_grade_id,
           start_date,
           end_date,
           rate_unit,
           rate_amount,
           currency_code,
+          is_active,
           professional_grades (
             name
+          ),
+          project_position_skill_requirements (
+            id,
+            notes,
+            requirement_level,
+            weight,
+            skills (
+              id,
+              name,
+              skill_categories (
+                name
+              )
+            )
           ),
           project_position_weeks (
             week_start,
@@ -337,6 +503,7 @@ export default async function ProjectDetailPage({
           ),
           project_assignments (
             id,
+            profile_id,
             assigned_from,
             assigned_to,
             notes,
@@ -378,7 +545,20 @@ export default async function ProjectDetailPage({
         `
       )
       .eq("project_id", projectId)
-      .order("week_start", { ascending: false })
+      .order("week_start", { ascending: false }),
+    supabase
+      .from("skills")
+      .select(
+        `
+          id,
+          name,
+          skill_categories (
+            name
+          )
+        `
+      )
+      .eq("is_active", true)
+      .order("name", { ascending: true })
   ]);
 
   if (!project) {
@@ -390,7 +570,11 @@ export default async function ProjectDetailPage({
   const projectCustomer = firstRelation<{ name: string }>(project.customers);
   const projectClientUnit = firstRelation<{ name: string }>(project.client_units);
   const projectLead = firstRelation<{ full_name: string }>(project.profiles);
-  const projectCharter = firstRelation<{ objective: string }>(project.project_charters);
+  const projectCharter = firstRelation<{
+    objective: string;
+    scope_summary: string | null;
+    milestones_summary: string | null;
+  }>(project.project_charters);
   const projectFinancials = firstRelation<{
     declared_budget: number | null;
     currency_code: string;
@@ -398,9 +582,30 @@ export default async function ProjectDetailPage({
   }>(project.project_financials);
 
   const navItems = buildPrimaryNav("projects");
+  const portfolioRows = (portfolios as { id: string; name: string }[] | null) ?? [];
+  const programRows =
+    ((programs as { id: string; name: string; portfolio_id: string }[] | null) ?? []).map(
+      (program) => ({
+        ...program
+      })
+    );
+  const customerRows = (customers as { id: string; name: string }[] | null) ?? [];
+  const clientUnitRows =
+    ((clientUnits as { id: string; name: string; customer_id: string }[] | null) ?? []).map(
+      (unit) => ({
+        ...unit
+      })
+    );
   const projectRows = (positions as PositionRow[] | null) ?? [];
   const employeeRows = (employees as ProjectEmployeeRow[] | null) ?? [];
   const gradeRows = (grades as { id: string; name: string }[] | null) ?? [];
+  const skillRows = ((skills as SkillRow[] | null) ?? []).map(
+    (skill): SkillOption => ({
+      categoryName: skill.skill_categories?.name ?? null,
+      id: skill.id,
+      name: skill.name
+    })
+  );
   const statusReportRows = (statusReports as StatusReportRow[] | null) ?? [];
   const reportAuthorMap = new Map(employeeRows.map((employee) => [employee.id, employee.full_name]));
   const selectedStatusReport =
@@ -484,6 +689,49 @@ export default async function ProjectDetailPage({
         )
         .eq("entry_type", "project")
         .in("project_assignment_id", assignmentIds)
+    : { data: [] };
+  const { data: billingManagementEntries } = assignmentIds.length
+    ? await supabase
+        .from("time_entries")
+        .select(
+          `
+            id,
+            hours,
+            description,
+            weekly_timesheets (
+              week_start,
+              status,
+              profiles (
+                full_name
+              )
+            ),
+            project_assignments!inner (
+              id,
+              project_position_id,
+              profiles (
+                full_name
+              ),
+              project_positions (
+                title,
+                projects (
+                  name
+                )
+              )
+            ),
+            billing_overrides (
+              id,
+              override_hours,
+              overridden_at,
+              reason,
+              profiles:overridden_by (
+                full_name
+              )
+            )
+          `
+        )
+        .eq("entry_type", "project")
+        .in("project_assignment_id", assignmentIds)
+        .order("created_at", { ascending: false })
     : { data: [] };
 
   const conflictMap = new Map<string, ConflictDetail[]>();
@@ -615,6 +863,114 @@ export default async function ProjectDetailPage({
   const plannedStaffingCost = positionFinancialRows.reduce((sum, row) => sum + row.plannedCost, 0);
   const actualStaffingCost = positionFinancialRows.reduce((sum, row) => sum + row.actualCost, 0);
   const billableStaffingCost = positionFinancialRows.reduce((sum, row) => sum + row.billableCost, 0);
+  const currentWeekStart = normalizeWeekStart(new Date()).toISOString().slice(0, 10);
+  const billingRows = (billingManagementEntries as BillingManagementRow[] | null) ?? [];
+  const matchHintsByPosition = new Map<string, PositionMatchHint[]>();
+
+  for (const position of projectRows) {
+    const requirements = [...(position.project_position_skill_requirements ?? [])].sort((left, right) => {
+      if (left.requirement_level !== right.requirement_level) {
+        return left.requirement_level === "required" ? -1 : 1;
+      }
+
+      return (left.skills?.name ?? "").localeCompare(right.skills?.name ?? "");
+    });
+
+    if (!requirements.length) {
+      continue;
+    }
+
+    const totalWeight = requirements.reduce((sum, requirement) => sum + Number(requirement.weight), 0);
+    const requiredRequirements = requirements.filter(
+      (requirement) => requirement.requirement_level === "required"
+    );
+    const preferredRequirements = requirements.filter(
+      (requirement) => requirement.requirement_level === "preferred"
+    );
+
+    const hints = employeeRows
+      .map((employee): PositionMatchHint => {
+        const employeeSkillMap = new Map(
+          ((employee.employee_skills ?? []) as ProjectEmployeeRow["employee_skills"])
+            ?.filter((entry) => entry.skills?.id)
+            .map((entry) => [
+              entry.skills?.id as string,
+              entry.proficiency_score
+            ]) ?? []
+        );
+        const matchedRequirements = requirements.filter(
+          (requirement) => requirement.skills?.id && employeeSkillMap.has(requirement.skills.id)
+        );
+        const missingRequiredSkillNames = requiredRequirements
+          .filter(
+            (requirement) =>
+              requirement.skills?.id && !employeeSkillMap.has(requirement.skills.id)
+          )
+          .map((requirement) => requirement.skills?.name ?? "Unknown skill");
+        const matchedWeight = matchedRequirements.reduce(
+          (sum, requirement) => sum + Number(requirement.weight),
+          0
+        );
+        const matchedRequired = requiredRequirements.length - missingRequiredSkillNames.length;
+        const matchedPreferred = preferredRequirements.filter(
+          (requirement) =>
+            requirement.skills?.id && employeeSkillMap.has(requirement.skills.id)
+        ).length;
+        const proficiencyScores = matchedRequirements
+          .map((requirement) =>
+            requirement.skills?.id
+              ? employeeSkillMap.get(requirement.skills.id) ?? null
+              : null
+          )
+          .filter((value): value is number => value !== null);
+        const proficiencyAverage = proficiencyScores.length
+          ? Number(
+              (
+                proficiencyScores.reduce((sum, value) => sum + value, 0) /
+                proficiencyScores.length
+              ).toFixed(1)
+            )
+          : null;
+        const matchPercent = totalWeight
+          ? Math.round((matchedWeight / totalWeight) * 100)
+          : 0;
+        const status =
+          missingRequiredSkillNames.length === 0 && matchPercent >= 75
+            ? "strong"
+            : missingRequiredSkillNames.length === 0 && matchedRequirements.length > 0
+              ? "good"
+              : matchedRequirements.length > 0
+                ? "partial"
+                : "missing";
+
+        return {
+          employeeId: employee.id,
+          fullName: employee.full_name,
+          matchedPreferred,
+          matchedRequired,
+          matchPercent,
+          missingRequiredSkillNames,
+          proficiencyAverage,
+          status,
+          systemRole: employee.system_role,
+          totalPreferred: preferredRequirements.length,
+          totalRequired: requiredRequirements.length
+        };
+      })
+      .sort((left, right) => {
+        if (left.missingRequiredSkillNames.length !== right.missingRequiredSkillNames.length) {
+          return left.missingRequiredSkillNames.length - right.missingRequiredSkillNames.length;
+        }
+
+        if (left.matchPercent !== right.matchPercent) {
+          return right.matchPercent - left.matchPercent;
+        }
+
+        return left.fullName.localeCompare(right.fullName);
+      });
+
+    matchHintsByPosition.set(position.id, hints);
+  }
 
   return (
     <AppFrame
@@ -671,6 +1027,249 @@ export default async function ProjectDetailPage({
               </dd>
             </div>
           </dl>
+        </article>
+      </section>
+
+      <section className="workspace-grid workspace-grid--project">
+        <article className="panel dashboard-card project-form-card">
+          <div className="card-kicker">Project management</div>
+          <h2>Edit project shell</h2>
+          <p className="card-copy">
+            Update the delivery context, ownership, lifecycle and commercial
+            baseline without leaving the project workspace.
+          </p>
+
+          <form action={updateProjectWorkspace} className="project-form-grid">
+            <input name="project_id" type="hidden" value={projectId} />
+
+            <label className="field">
+              <span>Portfolio</span>
+              <select defaultValue={project.portfolio_id ?? ""} name="portfolio_id" required>
+                <option value="">Select portfolio</option>
+                {portfolioRows.map((portfolio) => (
+                  <option key={portfolio.id} value={portfolio.id}>
+                    {portfolio.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Program</span>
+              <select defaultValue={project.program_id ?? ""} name="program_id">
+                <option value="">Optional program</option>
+                {programRows.map((program) => (
+                  <option key={program.id} value={program.id}>
+                    {program.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Customer</span>
+              <select defaultValue={project.customer_id ?? ""} name="customer_id" required>
+                <option value="">Select customer</option>
+                {customerRows.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Client unit</span>
+              <select defaultValue={project.client_unit_id ?? ""} name="client_unit_id">
+                <option value="">Optional client unit</option>
+                {clientUnitRows.map((unit) => (
+                  <option key={unit.id} value={unit.id}>
+                    {unit.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Project name</span>
+              <input defaultValue={project.name} name="name" required type="text" />
+            </label>
+
+            <label className="field">
+              <span>Code</span>
+              <input defaultValue={project.code ?? ""} name="code" type="text" />
+            </label>
+
+            <label className="field">
+              <span>Lifecycle</span>
+              <select
+                defaultValue={project.lifecycle_status}
+                name="lifecycle_status"
+                required
+              >
+                <option value="draft">Draft</option>
+                <option value="planned">Planned</option>
+                <option value="active">Active</option>
+                <option value="on_hold">On hold</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Internal lead</span>
+              <select
+                defaultValue={project.internal_project_lead_id ?? ""}
+                name="internal_project_lead_id"
+              >
+                <option value="">Optional lead</option>
+                {employeeRows
+                  .filter((employee) =>
+                    ["project_lead", "portfolio_manager"].includes(employee.system_role)
+                  )
+                  .map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.full_name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Start date</span>
+              <input defaultValue={project.start_date} name="start_date" required type="date" />
+            </label>
+
+            <label className="field">
+              <span>End date</span>
+              <input defaultValue={project.end_date ?? ""} name="end_date" type="date" />
+            </label>
+
+            <label className="field">
+              <span>Declared budget</span>
+              <input
+                defaultValue={projectFinancials?.declared_budget ?? ""}
+                min="0"
+                name="declared_budget"
+                step="0.01"
+                type="number"
+              />
+            </label>
+
+            <label className="field field--full">
+              <span>Description</span>
+              <textarea defaultValue={project.description ?? ""} name="description" rows={3} />
+            </label>
+
+            <label className="field field--full">
+              <span>Objective</span>
+              <textarea
+                defaultValue={projectCharter?.objective ?? ""}
+                name="objective"
+                required
+                rows={3}
+              />
+            </label>
+
+            <label className="field field--full">
+              <span>Scope summary</span>
+              <textarea
+                defaultValue={projectCharter?.scope_summary ?? ""}
+                name="scope_summary"
+                rows={3}
+              />
+            </label>
+
+            <label className="field field--full">
+              <span>Milestones</span>
+              <textarea
+                defaultValue={projectCharter?.milestones_summary ?? ""}
+                name="milestones_summary"
+                rows={3}
+              />
+            </label>
+
+            <label className="field field--full">
+              <span>Budget notes</span>
+              <textarea
+                defaultValue={projectFinancials?.budget_notes ?? ""}
+                name="budget_notes"
+                rows={3}
+              />
+            </label>
+
+            <div className="field field--full project-form-actions">
+              <button className="cta cta-primary" type="submit">
+                Save project changes
+              </button>
+            </div>
+          </form>
+        </article>
+
+        <article className="panel dashboard-card">
+          <div className="card-kicker">Lifecycle control</div>
+          <h2>{project.lifecycle_status.replaceAll("_", " ")}</h2>
+          <p className="card-copy">
+            Use the quick controls for the common lifecycle transitions. The
+            full edit form on the left can still set any supported status.
+          </p>
+
+          <div className="tag-list">
+            <span className="tag">
+              Status: {project.lifecycle_status.replaceAll("_", " ")}
+            </span>
+            <span className="tag">
+              {project.end_date ? "Dated delivery window" : "Open-ended timeline"}
+            </span>
+          </div>
+
+          <div className="inline-form inline-form--divider">
+            {project.lifecycle_status !== "cancelled" ? (
+              <form action={setProjectLifecycleStatus}>
+                <input name="project_id" type="hidden" value={projectId} />
+                <input name="lifecycle_status" type="hidden" value="cancelled" />
+                <button className="cta cta-secondary" type="submit">
+                  Deactivate project
+                </button>
+              </form>
+            ) : (
+              <form action={setProjectLifecycleStatus}>
+                <input name="project_id" type="hidden" value={projectId} />
+                <input name="lifecycle_status" type="hidden" value="planned" />
+                <button className="cta cta-secondary" type="submit">
+                  Reactivate project
+                </button>
+              </form>
+            )}
+
+            {project.lifecycle_status !== "completed" ? (
+              <form action={setProjectLifecycleStatus}>
+                <input name="project_id" type="hidden" value={projectId} />
+                <input name="lifecycle_status" type="hidden" value="completed" />
+                <button className="cta cta-secondary" type="submit">
+                  Mark completed
+                </button>
+              </form>
+            ) : null}
+
+            {project.lifecycle_status === "on_hold" ? (
+              <form action={setProjectLifecycleStatus}>
+                <input name="project_id" type="hidden" value={projectId} />
+                <input name="lifecycle_status" type="hidden" value="active" />
+                <button className="cta cta-secondary" type="submit">
+                  Resume project
+                </button>
+              </form>
+            ) : (
+              <form action={setProjectLifecycleStatus}>
+                <input name="project_id" type="hidden" value={projectId} />
+                <input name="lifecycle_status" type="hidden" value="on_hold" />
+                <button className="cta cta-secondary" type="submit">
+                  Put on hold
+                </button>
+              </form>
+            )}
+          </div>
         </article>
       </section>
 
@@ -773,6 +1372,154 @@ export default async function ProjectDetailPage({
                 No positions yet. Once planning starts, this view will turn into the core plan-vs-actual commercial dashboard for the project.
               </div>
             )}
+          </div>
+        </article>
+      </section>
+
+      <section className="workspace-grid workspace-grid--project">
+        <article className="panel dashboard-card project-form-card">
+          <div className="card-kicker">Billing overrides</div>
+          <h2>Commercial adjustments on reported project time</h2>
+          <p className="card-copy">
+            Reported hours stay unchanged. Overrides let project leads and
+            portfolio managers record the billable view separately for
+            commercial reporting.
+          </p>
+
+          <div className="billing-override-list">
+            {billingRows.length ? (
+              billingRows.map((entry) => {
+                const override = firstRelation<{
+                  id: string;
+                  override_hours: number;
+                  overridden_at: string;
+                  reason: string | null;
+                  profiles: {
+                    full_name: string;
+                  } | null;
+                }>(entry.billing_overrides);
+                const effectiveHours = Number(override?.override_hours ?? entry.hours);
+
+                return (
+                  <article className="financial-row" key={entry.id}>
+                    <div className="financial-row-main">
+                      <div>
+                        <h3>{entry.project_assignments?.profiles?.full_name ?? "Unknown employee"}</h3>
+                        <p>
+                          {(entry.project_assignments?.project_positions?.projects?.name ??
+                            "Unknown project") +
+                            " / " +
+                            (entry.project_assignments?.project_positions?.title ??
+                              "Unknown position")}
+                        </p>
+                      </div>
+                      <div className="position-chip-group">
+                        <span className="pill">
+                          {formatHours(Number(entry.hours))} reported
+                        </span>
+                        <span className="pill">
+                          {formatHours(effectiveHours)} billable
+                        </span>
+                        <span className="pill">
+                          {formatDate(entry.weekly_timesheets?.week_start ?? null)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="card-copy">{entry.description}</p>
+
+                    {override ? (
+                      <div className="ok-box">
+                        Override set by {override.profiles?.full_name ?? "Unknown user"} on{" "}
+                        {formatDateTime(override.overridden_at)}
+                        {override.reason ? `: ${override.reason}` : "."}
+                      </div>
+                    ) : (
+                      <div className="skill-list-empty">
+                        No billing override yet. Commercial reporting currently
+                        falls back to the employee-reported hours.
+                      </div>
+                    )}
+
+                    <form action={saveBillingOverride} className="project-form-grid inline-form--divider">
+                      <input name="project_id" type="hidden" value={projectId} />
+                      <input name="time_entry_id" type="hidden" value={entry.id} />
+
+                      <label className="field">
+                        <span>Override hours</span>
+                        <input
+                          defaultValue={override?.override_hours ?? entry.hours}
+                          min="0"
+                          name="override_hours"
+                          required
+                          step="0.25"
+                          type="number"
+                        />
+                      </label>
+
+                      <label className="field field--full">
+                        <span>Reason</span>
+                        <input
+                          defaultValue={override?.reason ?? ""}
+                          name="reason"
+                          placeholder="Why should the billable view differ?"
+                          type="text"
+                        />
+                      </label>
+
+                      <div className="field field--full project-form-actions">
+                        <button className="cta cta-secondary" type="submit">
+                          Save override
+                        </button>
+                      </div>
+                    </form>
+
+                    {override ? (
+                      <form action={removeBillingOverride}>
+                        <input name="project_id" type="hidden" value={projectId} />
+                        <input
+                          name="billing_override_id"
+                          type="hidden"
+                          value={override.id}
+                        />
+                        <button className="cta cta-secondary" type="submit">
+                          Remove override
+                        </button>
+                      </form>
+                    ) : null}
+                  </article>
+                );
+              })
+            ) : (
+              <div className="financial-row financial-row--empty">
+                No project time entries exist yet. Billing overrides will appear
+                here once staffed team members submit weekly project time.
+              </div>
+            )}
+          </div>
+        </article>
+
+        <article className="panel dashboard-card">
+          <div className="card-kicker">Override guidance</div>
+          <h2>What this changes</h2>
+          <p className="card-copy">
+            Overrides affect the billable reporting view only. The original
+            employee-reported time remains stored unchanged for auditability.
+          </p>
+          <div className="tag-list">
+            <span className="tag">{billingRows.length} project time entries visible</span>
+            <span className="tag">
+              {
+                billingRows.filter((row) =>
+                  Boolean(
+                    firstRelation<{
+                      id: string;
+                    }>(row.billing_overrides)
+                  )
+                ).length
+              }{" "}
+              with override
+            </span>
           </div>
         </article>
       </section>
@@ -967,6 +1714,8 @@ export default async function ProjectDetailPage({
           <p className="card-copy">
             Positions are the stable planning unit. Weekly demand rows are
             generated automatically from the date range and weekly hours below.
+            Skill requirements can be attached right after creation on the
+            position card.
           </p>
 
           <form action={createProjectPosition} className="project-form-grid">
@@ -1045,7 +1794,8 @@ export default async function ProjectDetailPage({
           <p className="card-copy">
             This creates one historized assignment and weekly fulfillment rows
             for the chosen date range. Allocation is derived automatically from
-            the weekly hours.
+            the weekly hours, while the position cards below surface skill-match
+            hints before you assign.
           </p>
 
           <form action={createProjectAssignment} className="project-form-grid">
@@ -1056,8 +1806,13 @@ export default async function ProjectDetailPage({
               <select name="project_position_id" required>
                 <option value="">Select position</option>
                 {projectRows.map((position) => (
-                  <option key={position.id} value={position.id}>
+                  <option
+                    disabled={!position.is_active}
+                    key={position.id}
+                    value={position.id}
+                  >
                     {position.title} • {position.professional_grades?.name ?? "No grade"}
+                    {position.is_active ? "" : " (inactive)"}
                   </option>
                 ))}
               </select>
@@ -1130,6 +1885,9 @@ export default async function ProjectDetailPage({
                     </p>
                   </div>
                   <div className="position-chip-group">
+                    <span className={`pill ${position.is_active ? "pill--strong" : "pill--missing"}`}>
+                      {position.is_active ? "Active position" : "Inactive position"}
+                    </span>
                     <span className="pill">
                       {averagePlannedHours.toFixed(1)}h / week planned
                     </span>
@@ -1140,12 +1898,287 @@ export default async function ProjectDetailPage({
                       {formatMoney(position.rate_amount, position.currency_code)} /{" "}
                       {position.rate_unit}
                     </span>
+                    <form action={setProjectPositionActiveState}>
+                      <input name="project_id" type="hidden" value={projectId} />
+                      <input name="position_id" type="hidden" value={position.id} />
+                      <input
+                        name="next_is_active"
+                        type="hidden"
+                        value={position.is_active ? "false" : "true"}
+                      />
+                      <button className="cta cta-secondary" type="submit">
+                        {position.is_active ? "Deactivate" : "Reactivate"}
+                      </button>
+                    </form>
                   </div>
                 </div>
 
                 {position.description ? (
                   <p className="card-copy">{position.description}</p>
                 ) : null}
+
+                <section className="position-detail-grid">
+                  <article className="position-subcard">
+                    <div className="skill-section-head">
+                      <strong>Required skills</strong>
+                      <span>
+                        {(position.project_position_skill_requirements ?? []).length} linked
+                      </span>
+                    </div>
+
+                    {(position.project_position_skill_requirements ?? []).length ? (
+                      <div className="skill-badge-list">
+                        {[...(position.project_position_skill_requirements ?? [])]
+                          .sort((left, right) => {
+                            if (left.requirement_level !== right.requirement_level) {
+                              return left.requirement_level === "required" ? -1 : 1;
+                            }
+
+                            return (left.skills?.name ?? "").localeCompare(
+                              right.skills?.name ?? ""
+                            );
+                          })
+                          .map((requirement) => (
+                            <div className="skill-badge" key={requirement.id}>
+                              <div className="skill-badge-copy">
+                                <strong>{requirement.skills?.name ?? "Unknown skill"}</strong>
+                                <span>
+                                  {(requirement.skills?.skill_categories?.name ??
+                                    "Uncategorized") +
+                                    ` / ${formatRequirementLevel(requirement.requirement_level)}`}
+                                </span>
+                              </div>
+
+                              <form action={removePositionSkillRequirement}>
+                                <input name="project_id" type="hidden" value={projectId} />
+                                <input name="requirement_id" type="hidden" value={requirement.id} />
+                                <button className="skill-remove" type="submit">
+                                  Remove
+                                </button>
+                              </form>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="skill-list-empty">
+                        No skill requirements captured yet. Add the first one
+                        below to unlock candidate-fit hints for this position.
+                      </div>
+                    )}
+
+                    {skillRows.length ? (
+                      <form
+                        action={savePositionSkillRequirement}
+                        className="inline-form inline-form--divider"
+                      >
+                        <input name="project_id" type="hidden" value={projectId} />
+                        <input name="project_position_id" type="hidden" value={position.id} />
+
+                        <label className="field">
+                          <span>Skill</span>
+                          <select name="skill_id" required>
+                            <option value="">Select skill</option>
+                            {skillRows.map((skill) => (
+                              <option key={skill.id} value={skill.id}>
+                                {formatSkillOptionLabel(skill)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="field">
+                          <span>Requirement level</span>
+                          <select defaultValue="required" name="requirement_level">
+                            <option value="required">Required</option>
+                            <option value="preferred">Preferred</option>
+                          </select>
+                        </label>
+
+                        <label className="field">
+                          <span>Notes</span>
+                          <input
+                            name="notes"
+                            placeholder="Optional relevance or delivery context"
+                            type="text"
+                          />
+                        </label>
+
+                        <button className="cta cta-secondary" type="submit">
+                          Save requirement
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="skill-list-empty">
+                        No active skills exist in the catalog yet. Add them on
+                        the People page first.
+                      </div>
+                    )}
+                  </article>
+
+                  <article className="position-subcard">
+                    <div className="skill-section-head">
+                      <strong>Edit position</strong>
+                      <span>Update planning and delivery shape</span>
+                    </div>
+
+                    <form action={updateProjectPosition} className="project-form-grid">
+                      <input name="project_id" type="hidden" value={projectId} />
+                      <input name="position_id" type="hidden" value={position.id} />
+
+                      <label className="field">
+                        <span>Position title</span>
+                        <input defaultValue={position.title} name="title" required type="text" />
+                      </label>
+
+                      <label className="field">
+                        <span>Professional grade</span>
+                        <select
+                          defaultValue={position.professional_grade_id}
+                          name="professional_grade_id"
+                          required
+                        >
+                          <option value="">Select grade</option>
+                          {gradeRows.map((grade) => (
+                            <option key={grade.id} value={grade.id}>
+                              {grade.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="field">
+                        <span>Start date</span>
+                        <input
+                          defaultValue={position.start_date}
+                          name="start_date"
+                          required
+                          type="date"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span>End date</span>
+                        <input
+                          defaultValue={position.end_date ?? ""}
+                          name="end_date"
+                          type="date"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span>Planned hours / week</span>
+                        <input
+                          defaultValue={averagePlannedHours.toFixed(2)}
+                          min="0"
+                          name="planned_hours"
+                          required
+                          step="0.25"
+                          type="number"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span>Rate unit</span>
+                        <select defaultValue={position.rate_unit} name="rate_unit">
+                          <option value="hourly">Hourly</option>
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                        </select>
+                      </label>
+
+                      <label className="field">
+                        <span>Rate amount</span>
+                        <input
+                          defaultValue={position.rate_amount}
+                          min="0"
+                          name="rate_amount"
+                          required
+                          step="0.01"
+                          type="number"
+                        />
+                      </label>
+
+                      <label className="field field--full">
+                        <span>Description</span>
+                        <textarea
+                          defaultValue={position.description ?? ""}
+                          name="description"
+                          rows={3}
+                        />
+                      </label>
+
+                      <div className="field field--full project-form-actions">
+                        <button className="cta cta-secondary" type="submit">
+                          Save position
+                        </button>
+                      </div>
+                    </form>
+                  </article>
+
+                  <article className="position-subcard">
+                    <div className="skill-section-head">
+                      <strong>Candidate fit hints</strong>
+                      <span>
+                        {(matchHintsByPosition.get(position.id) ?? []).slice(0, 5).length} shown
+                      </span>
+                    </div>
+
+                    {(position.project_position_skill_requirements ?? []).length ? (
+                      <div className="match-list">
+                        {(matchHintsByPosition.get(position.id) ?? []).slice(0, 5).map((match) => (
+                          <article
+                            className={`match-row match-row--${match.status}`}
+                            key={`${position.id}:${match.employeeId}`}
+                          >
+                            <div className="match-row-top">
+                              <div>
+                                <h3>{match.fullName}</h3>
+                                <p>{match.systemRole.replaceAll("_", " ")}</p>
+                              </div>
+                              <span className={`pill pill--${match.status}`}>
+                                {formatMatchStatus(match.status)}
+                              </span>
+                            </div>
+
+                            <div className="match-metrics">
+                              <span className="tag">
+                                {match.matchPercent}% weighted match
+                              </span>
+                              <span className="tag">
+                                {match.matchedRequired}/{match.totalRequired} required
+                              </span>
+                              <span className="tag">
+                                {match.matchedPreferred}/{match.totalPreferred} preferred
+                              </span>
+                              {match.proficiencyAverage !== null ? (
+                                <span className="tag">
+                                  {formatProficiencyLabel(
+                                    Math.round(match.proficiencyAverage)
+                                  )} average
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {match.missingRequiredSkillNames.length ? (
+                              <p className="match-note">
+                                Missing required: {match.missingRequiredSkillNames.join(", ")}
+                              </p>
+                            ) : (
+                              <p className="match-note">
+                                All required skills are covered for this profile.
+                              </p>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="skill-list-empty">
+                        Candidate hints appear once at least one required or
+                        preferred skill is linked to the position.
+                      </div>
+                    )}
+                  </article>
+                </section>
 
                 <div className="assignment-list">
                   {(position.project_assignments ?? []).length ? (
@@ -1178,6 +2211,147 @@ export default async function ProjectDetailPage({
                           {assignment.notes ? (
                             <p className="card-copy">{assignment.notes}</p>
                           ) : null}
+
+                          <div className="assignment-management-grid">
+                            <article className="position-subcard">
+                              <div className="skill-section-head">
+                                <strong>Edit assignment</strong>
+                                <span>Dates, hours and notes</span>
+                              </div>
+
+                              <form action={updateProjectAssignment} className="project-form-grid">
+                                <input name="project_id" type="hidden" value={projectId} />
+                                <input name="assignment_id" type="hidden" value={assignment.id} />
+
+                                <label className="field">
+                                  <span>Assigned from</span>
+                                  <input
+                                    defaultValue={assignment.assigned_from}
+                                    name="assigned_from"
+                                    required
+                                    type="date"
+                                  />
+                                </label>
+
+                                <label className="field">
+                                  <span>Assigned to</span>
+                                  <input
+                                    defaultValue={assignment.assigned_to ?? ""}
+                                    name="assigned_to"
+                                    type="date"
+                                  />
+                                </label>
+
+                                <label className="field">
+                                  <span>Hours / week</span>
+                                  <input
+                                    defaultValue={firstWeek?.assigned_hours ?? ""}
+                                    min="0"
+                                    name="assigned_hours"
+                                    required
+                                    step="0.25"
+                                    type="number"
+                                  />
+                                </label>
+
+                                <label className="field field--full">
+                                  <span>Notes</span>
+                                  <textarea
+                                    defaultValue={assignment.notes ?? ""}
+                                    name="notes"
+                                    rows={3}
+                                  />
+                                </label>
+
+                                <div className="field field--full project-form-actions">
+                                  <button className="cta cta-secondary" type="submit">
+                                    Save assignment
+                                  </button>
+                                </div>
+                              </form>
+                            </article>
+
+                            <article className="position-subcard">
+                              <div className="skill-section-head">
+                                <strong>Reassign or end</strong>
+                                <span>Preserve history by splitting</span>
+                              </div>
+
+                              <form action={reassignProjectAssignment} className="project-form-grid">
+                                <input name="project_id" type="hidden" value={projectId} />
+                                <input name="assignment_id" type="hidden" value={assignment.id} />
+
+                                <label className="field field--full">
+                                  <span>New employee</span>
+                                  <select defaultValue="" name="new_profile_id" required>
+                                    <option value="">Select employee</option>
+                                    {employeeRows
+                                      .filter((employee) => employee.id !== assignment.profile_id)
+                                      .map((employee) => (
+                                        <option key={employee.id} value={employee.id}>
+                                          {employee.full_name} •{" "}
+                                          {employee.system_role.replaceAll("_", " ")}
+                                        </option>
+                                      ))}
+                                  </select>
+                                </label>
+
+                                <label className="field">
+                                  <span>Reassign from week</span>
+                                  <input
+                                    defaultValue={currentWeekStart}
+                                    name="reassign_from"
+                                    required
+                                    type="date"
+                                  />
+                                </label>
+
+                                <label className="field">
+                                  <span>New end date</span>
+                                  <input
+                                    defaultValue={assignment.assigned_to ?? ""}
+                                    name="new_assigned_to"
+                                    type="date"
+                                  />
+                                </label>
+
+                                <label className="field">
+                                  <span>Hours / week</span>
+                                  <input
+                                    defaultValue={firstWeek?.assigned_hours ?? ""}
+                                    min="0"
+                                    name="new_assigned_hours"
+                                    required
+                                    step="0.25"
+                                    type="number"
+                                  />
+                                </label>
+
+                                <label className="field field--full">
+                                  <span>Notes for new assignment</span>
+                                  <textarea
+                                    defaultValue={assignment.notes ?? ""}
+                                    name="notes"
+                                    rows={3}
+                                  />
+                                </label>
+
+                                <div className="field field--full project-form-actions">
+                                  <button className="cta cta-secondary" type="submit">
+                                    Reassign with split
+                                  </button>
+                                </div>
+                              </form>
+
+                              <form action={endProjectAssignment}>
+                                <input name="project_id" type="hidden" value={projectId} />
+                                <input name="assignment_id" type="hidden" value={assignment.id} />
+                                <button className="cta cta-secondary" type="submit">
+                                  End assignment this week
+                                </button>
+                              </form>
+                            </article>
+                          </div>
 
                           {conflictDetails.length ? (
                             <div className="warning-box">
