@@ -32,7 +32,7 @@ Core product principles already locked:
 
 ## Design direction
 
-The current UI direction is:
+The current UI direction is still:
 
 - modern enterprise SaaS
 - compact and more sophisticated, not oversized
@@ -67,7 +67,8 @@ Already created in repo:
 - RLS / access policy migration
 - profile bootstrap trigger migration
 - self-service profile name update migration
-- RLS recursion fix migration for project positions / assignments
+- RLS recursion fixes for project positions / assignments
+- project position insert policy fix
 
 Current assumption:
 
@@ -107,17 +108,26 @@ Implemented:
 - protected routes
 - self-service update of display name on dashboard
 - people directory read from `profiles`
-- create portfolios
-- create programs
-- create customers
-- create client units
+- create and edit portfolios
+- create and edit programs
+- create, edit and deactivate/reactivate customers
+- create and edit client units
 - create projects with:
   - project shell
   - charter record
   - financial record
+- edit project shell and lifecycle directly on project detail
 - list existing projects
 - create project positions
+- edit project positions
+- activate / deactivate positions
+- attach skill requirements to positions
+- maintain employee skill profiles
+- surface skill-match hints for staffing candidates
 - create staffing assignments
+- edit staffing assignments
+- split and reassign assignments while preserving history
+- end assignments cleanly against the historized week model
 - view project detail with capacity conflict warnings
 - create and save weekly timesheets
 - capture project and internal time in one week-level flow
@@ -127,21 +137,25 @@ Implemented:
 - add historized comments to status reports
 - view first financial plan vs actual summaries on project detail pages
 - view position-level planned, actual and billable cost rollups
+- create, update and remove billing overrides on project time entries
+- manage global user roles in-app via `profiles.system_role`
+- manage scoped program / project / portfolio access in-app via `access_assignments`
+- manage PM-side user activation state and core profile admin fields in-app
 
 ### Not built yet
 
-- financial reporting UI
-- PM employee master data management
-- edit/deactivate flows for projects, positions, assignments
-- more refined status-report editing/selection workflow
-- billing override editing UI
+- dedicated financial reporting UI beyond project-level views
+- richer PM employee master data beyond the current MVP stopgap
+- capacity administration UI
 - monthly financial aggregations
+- polished dashboard surfaces for responsibility and access views
+- broader UI refinement pass across the product
 
 ## Important remembered product notes
 
 ### Employee master data
 
-Current MVP has only `full_name` as practical stopgap.
+Current MVP still has only `full_name` as the practical stopgap for identity display.
 
 Later we must move to a richer employee master-data model:
 
@@ -164,24 +178,28 @@ Important business rule for later:
 - employees can see all employee profiles
 - normal staffed users only see their own project-specific data
 
+Important current implementation note:
+
+- global role management now exists in the app on `/people`
+- scoped access assignment management now also exists in the app on `/people`
+
 ## Suggested next implementation steps
 
 Recommended build order from here:
 
-1. Status reporting
-2. Financial plan vs actual views
-3. Skill requirements and skill-match hints on positions
-4. Edit / reassign / deactivate flows
-5. PM-managed employee master data
+1. UI refinement / design pass across the app
+2. Financial reporting UI beyond project-level rollups
+3. PM-managed employee master data
+4. Capacity administration UI
+5. Monthly financial aggregations
 
 If choosing only one immediate next slice, prefer:
 
-- `Status reporting`
-- `Skill requirements and skill-match hints`
+- `UI refinement / design pass`
 
 Reason:
 
-- project steering and first commercial rollups are now present; the next high-value step is better staffing quality through explicit skill requirements and match support
+- the product now covers the core MVP workflows more broadly, so the next highest-value step is improving clarity, polish, hierarchy and overall UX quality before adding the next heavy feature layer
 
 ## Technical verification status
 
@@ -199,4 +217,4 @@ The next assistant should:
 2. read `docs/PRODUCT_DESIGN.md`
 3. read `docs/SUPABASE_SCHEMA_V1.md`
 4. inspect current routes under `src/app`
-5. continue with `Skill requirements and skill-match hints` unless the user redirects
+5. continue with a UI refinement pass unless the user redirects
