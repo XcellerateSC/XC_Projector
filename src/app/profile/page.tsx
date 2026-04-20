@@ -53,9 +53,10 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           Back to dashboard
         </Link>
       }
-      description="This page is the home for personal self-service settings such as name, profile picture and later password management."
+      description="Keep your visible identity up to date and manage your personal self-service settings."
       eyebrow="Mein Profil"
       navItems={navItems}
+      topbarClassName="app-topbar--compact"
       title={displayName}
       userLabel={displayName}
     >

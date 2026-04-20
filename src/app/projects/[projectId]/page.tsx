@@ -307,6 +307,14 @@ function formatMatchStatus(status: PositionMatchHint["status"]) {
   }
 }
 
+function formatLifecycleLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatStatusLabel(value: "green" | "yellow" | "red") {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function toHourlyRate(rateUnit: string, rateAmount: number) {
   if (rateUnit === "daily") {
     return rateAmount / 8;
@@ -610,6 +618,24 @@ export default async function ProjectDetailPage({
   const reportAuthorMap = new Map(employeeRows.map((employee) => [employee.id, employee.full_name]));
   const selectedStatusReport =
     statusReportRows.find((report) => report.week_start === activeReportWeek) ?? null;
+  const selectedReportDimensions = [
+    ["Objective", selectedStatusReport?.objective_status ?? "green", selectedStatusReport?.objective_comment],
+    ["Timeline", selectedStatusReport?.timeline_status ?? "green", selectedStatusReport?.timeline_comment],
+    ["Budget", selectedStatusReport?.budget_status ?? "green", selectedStatusReport?.budget_comment],
+    ["Scope", selectedStatusReport?.scope_status ?? "green", selectedStatusReport?.scope_comment],
+    ["Risks", selectedStatusReport?.risks_status ?? "green", selectedStatusReport?.risks_comment]
+  ] as const;
+  const selectedStatusCounts = selectedReportDimensions.reduce(
+    (counts, [, status]) => {
+      counts[status] += 1;
+      return counts;
+    },
+    {
+      green: 0,
+      yellow: 0,
+      red: 0
+    }
+  );
 
   const reportIds = statusReportRows.map((report) => report.id);
   const { data: statusReportComments } = reportIds.length
@@ -1208,7 +1234,7 @@ export default async function ProjectDetailPage({
 
         <article className="panel dashboard-card">
           <div className="card-kicker">Lifecycle control</div>
-          <h2>{project.lifecycle_status.replaceAll("_", " ")}</h2>
+          <h2>{formatLifecycleLabel(project.lifecycle_status)}</h2>
           <p className="card-copy">
             Use the quick controls for the common lifecycle transitions. The
             full edit form on the left can still set any supported status.
@@ -1216,7 +1242,7 @@ export default async function ProjectDetailPage({
 
           <div className="tag-list">
             <span className="tag">
-              Status: {project.lifecycle_status.replaceAll("_", " ")}
+              Status: {formatLifecycleLabel(project.lifecycle_status)}
             </span>
             <span className="tag">
               {project.end_date ? "Dated delivery window" : "Open-ended timeline"}
@@ -1532,6 +1558,44 @@ export default async function ProjectDetailPage({
             One status report per project and week. Drafts stay editable. Submitted reports are locked and only expandable through comments.
           </p>
 
+          <div className="status-composer-preview">
+            <div className="status-composer-head">
+              <div>
+                <strong>{formatDate(activeReportWeek)}</strong>
+                <span>
+                  {selectedStatusReport
+                    ? `Editing ${selectedStatusReport.state} report`
+                    : "Preview for a new weekly report"}
+                </span>
+              </div>
+              <span className="pill">
+                {(selectedStatusReport?.overall_progress_percent ?? 0)}% progress
+              </span>
+            </div>
+
+            <div className="status-progress-track" aria-hidden="true">
+              <span
+                className="status-progress-fill"
+                style={{ width: `${selectedStatusReport?.overall_progress_percent ?? 0}%` }}
+              />
+            </div>
+
+            <div className="status-composer-grid">
+              <div>
+                <span>Green</span>
+                <strong>{selectedStatusCounts.green}</strong>
+              </div>
+              <div>
+                <span>Yellow</span>
+                <strong>{selectedStatusCounts.yellow}</strong>
+              </div>
+              <div>
+                <span>Red</span>
+                <strong>{selectedStatusCounts.red}</strong>
+              </div>
+            </div>
+          </div>
+
           <form action={saveStatusReportDraft} className="project-form-grid">
             <input name="project_id" type="hidden" value={projectId} />
 
@@ -1587,6 +1651,11 @@ export default async function ProjectDetailPage({
                     type="text"
                   />
                 </label>
+
+                <div className="status-field-indicator" aria-hidden="true">
+                  <span className={`status-dot status-dot--${statusValue ?? "green"}`} />
+                  <strong>{formatStatusLabel(statusValue ?? "green")}</strong>
+                </div>
               </div>
             ))}
 
@@ -1680,7 +1749,7 @@ export default async function ProjectDetailPage({
 
                       <form action={addStatusReportComment} className="inline-form inline-form--divider">
                         <input name="project_id" type="hidden" value={projectId} />
-                        <input name="report_week_start" type="hidden" value={activeReportWeek} />
+                        <input name="report_week_start" type="hidden" value={report.week_start} />
                         <input name="status_report_id" type="hidden" value={report.id} />
                         <label className="field">
                           <span>Add comment</span>
@@ -1864,6 +1933,7 @@ export default async function ProjectDetailPage({
         {projectRows.length ? (
           projectRows.map((position) => {
             const plannedWeeks = position.project_position_weeks ?? [];
+            const assignmentRows = position.project_assignments ?? [];
             const averagePlannedHours =
               plannedWeeks.reduce((sum, week) => sum + week.planned_hours, 0) /
               (plannedWeeks.length || 1);
@@ -1872,6 +1942,18 @@ export default async function ProjectDetailPage({
                 (sum, week) => sum + (week.planned_allocation_percent ?? 0),
                 0
               ) / (plannedWeeks.length || 1);
+            const assignedAllocation = assignmentRows.reduce(
+              (sum, assignment) => sum + Number(assignment.project_assignment_weeks?.[0]?.assigned_allocation_percent ?? 0),
+              0
+            );
+            const assignedHours = assignmentRows.reduce(
+              (sum, assignment) => sum + Number(assignment.project_assignment_weeks?.[0]?.assigned_hours ?? 0),
+              0
+            );
+            const conflictCount = assignmentRows.filter(
+              (assignment) => (conflictMap.get(assignment.id) ?? []).length > 0
+            ).length;
+            const openCapacity = Math.max(0, averagePlannedAllocation - assignedAllocation);
 
             return (
               <article className="panel position-card" key={position.id}>
@@ -1916,6 +1998,29 @@ export default async function ProjectDetailPage({
                 {position.description ? (
                   <p className="card-copy">{position.description}</p>
                 ) : null}
+
+                <div className="staffing-summary-strip">
+                  <div>
+                    <span>Assigned people</span>
+                    <strong>{assignmentRows.length}</strong>
+                  </div>
+                  <div>
+                    <span>Planned demand</span>
+                    <strong>{averagePlannedHours.toFixed(1)}h / week</strong>
+                  </div>
+                  <div>
+                    <span>Staffed today</span>
+                    <strong>{assignedHours.toFixed(1)}h / week</strong>
+                  </div>
+                  <div>
+                    <span>Open capacity</span>
+                    <strong>{Math.round(openCapacity)}%</strong>
+                  </div>
+                  <div>
+                    <span>Conflicts</span>
+                    <strong>{conflictCount}</strong>
+                  </div>
+                </div>
 
                 <section className="position-detail-grid">
                   <article className="position-subcard">
@@ -2181,8 +2286,8 @@ export default async function ProjectDetailPage({
                 </section>
 
                 <div className="assignment-list">
-                  {(position.project_assignments ?? []).length ? (
-                    position.project_assignments?.map((assignment) => {
+                  {assignmentRows.length ? (
+                    assignmentRows.map((assignment) => {
                       const firstWeek = assignment.project_assignment_weeks?.[0];
                       const conflictDetails = conflictMap.get(assignment.id) ?? [];
 
@@ -2204,9 +2309,28 @@ export default async function ProjectDetailPage({
                                 <span className="pill">
                                   {formatPercent(firstWeek.assigned_allocation_percent)}
                                 </span>
+                                {conflictDetails.length ? (
+                                  <span className="pill pill--missing">Conflict</span>
+                                ) : (
+                                  <span className="pill pill--strong">Covered</span>
+                                )}
                               </div>
                             ) : null}
                           </div>
+
+                          {firstWeek ? (
+                            <div className="assignment-loadbar" aria-hidden="true">
+                              <span
+                                className={`assignment-loadbar-fill${conflictDetails.length ? " is-conflicted" : ""}`}
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    Number(firstWeek.assigned_allocation_percent ?? 0)
+                                  )}%`
+                                }}
+                              />
+                            </div>
+                          ) : null}
 
                           {assignment.notes ? (
                             <p className="card-copy">{assignment.notes}</p>

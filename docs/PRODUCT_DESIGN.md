@@ -589,6 +589,13 @@ Recommended direction:
 - Client Components for interactive planning/time-entry surfaces
 - A component system that can support dense business UI without fighting the framework
 
+### UI density principle
+
+- Prefer compact, list-like business UI over large, airy cards when the user is scanning or maintaining multiple records.
+- Default to dense rows with strong hierarchy, short supporting metadata, and clear actions.
+- Use larger card treatments only when the content is genuinely richer and needs more visual separation.
+- Avoid oversized tiles that show little information; operational setup screens should feel efficient and information-dense.
+
 ### Backend
 
 Recommended direction:

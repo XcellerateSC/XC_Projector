@@ -15,6 +15,9 @@ type AppFrameProps = {
   eyebrow: string;
   title: string;
   description: string;
+  shellClassName?: string;
+  mainClassName?: string;
+  contentClassName?: string;
   topbarClassName?: string;
   userLabel?: string | null;
   actions?: ReactNode;
@@ -26,6 +29,9 @@ export function AppFrame({
   eyebrow,
   title,
   description,
+  shellClassName,
+  mainClassName,
+  contentClassName,
   topbarClassName,
   userLabel,
   actions,
@@ -33,7 +39,7 @@ export function AppFrame({
   navItems
 }: AppFrameProps) {
   return (
-    <div className="app-shell">
+    <div className={`app-shell${shellClassName ? ` ${shellClassName}` : ""}`}>
       <aside className="app-rail">
         <Link className="app-brand" href="/dashboard">
           <BrandLockup className="app-brand-lockup" priority size="sm" />
@@ -60,7 +66,7 @@ export function AppFrame({
         </div>
       </aside>
 
-      <main className="app-main">
+      <main className={`app-main${mainClassName ? ` ${mainClassName}` : ""}`}>
         <header className={`app-topbar panel${topbarClassName ? ` ${topbarClassName}` : ""}`}>
           <div className="app-topbar-copy">
             <span className="eyebrow">{eyebrow}</span>
@@ -71,7 +77,9 @@ export function AppFrame({
           <div className="app-topbar-actions">{actions}</div>
         </header>
 
-        <section className="app-content">{children}</section>
+        <section className={`app-content${contentClassName ? ` ${contentClassName}` : ""}`}>
+          {children}
+        </section>
       </main>
     </div>
   );

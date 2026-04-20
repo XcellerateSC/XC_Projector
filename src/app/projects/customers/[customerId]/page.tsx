@@ -46,6 +46,7 @@ export default async function CustomerDetailPage({
   return (
     <ProjectsShell
       activeSection="customers"
+      compactChrome
       counts={{
         customers: workspace.customerRows.length,
         portfolios: workspace.portfolioRows.length,
@@ -204,18 +205,23 @@ export default async function CustomerDetailPage({
               {selectedUnits.length ? (
                 selectedUnits.map((unit) => (
                   <article
-                    className={`project-row${section === "client-unit" ? " project-row--focus" : ""}`}
+                    className={`project-row project-row--overview project-row--compact${
+                      section === "client-unit" ? " project-row--focus" : ""
+                    }`}
                     key={unit.id}
                   >
                     <div className="project-row-main">
                       <div>
-                        <h3>{unit.name}</h3>
+                        <h3 className="project-row-title">{unit.name}</h3>
                         <p>{unit.description ?? "No description"}</p>
                       </div>
                     </div>
 
                     {workspace.isPortfolioManager ? (
-                      <form action={updateClientUnit} className="inline-form inline-form--divider">
+                      <form
+                        action={updateClientUnit}
+                        className="inline-form inline-form--divider inline-form--compact"
+                      >
                         <input name="client_unit_id" type="hidden" value={unit.id} />
                         <input name="customer_id" type="hidden" value={selectedCustomer.id} />
                         <input

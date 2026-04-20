@@ -545,10 +545,11 @@ export default async function DashboardPage() {
           </form>
         </>
       }
-      description="A compact overview of your staffing, current week status and project responsibilities."
+      description="See your current week, staffing and project signals at a glance."
       eyebrow="Dashboard"
       navItems={navItems}
-      title={`Welcome back, ${displayName}`}
+      topbarClassName="app-topbar--compact"
+      title="Dashboard"
       userLabel={displayName}
     >
       <section className="workspace-grid workspace-grid--three">
