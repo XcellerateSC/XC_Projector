@@ -1,0 +1,160 @@
+@media (max-width: 1180px) {
+  .hero-stage-bar,
+  .hero-stage-grid,
+  .hero-editorial-grid,
+  .story-grid,
+  .hero-proof-row,
+  .project-hub-grid,
+  .workspace-grid--three,
+  .workspace-grid--two,
+  .workspace-grid--project,
+  .feature-grid,
+  .ops-grid,
+  .people-card,
+  .people-meta,
+  .project-form-grid,
+  .position-detail-grid,
+  .assignment-management-grid,
+  .project-overview-table,
+  .project-row-meta,
+  .financial-kpi-pair,
+  .financial-metric-grid,
+  .status-field-pair,
+  .status-rating-grid,
+  .timesheet-entry-controls,
+  .timesheet-entry-row,
+  .inline-form--row {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-grid,
+  .metric-row,
+  .summary-strip,
+  .people-meta--compact,
+  .timesheet-status-bar,
+  .people-profile-facts,
+  .people-skill-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .timesheet-week-panel {
+    position: static;
+  }
+
+  .timesheet-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .people-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-cta {
+    flex-direction: column;
+    align-items: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell,
+  .hero-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .app-rail,
+  .hero-stage-rail {
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    align-items: center;
+  }
+
+  .app-brand,
+  .app-rail-footer {
+    display: none;
+  }
+
+  .app-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hero-stage-orbit {
+    grid-auto-flow: column;
+    gap: 10px;
+  }
+
+  .hero-stage-rail-caption {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .page-shell,
+  .auth-shell,
+  .app-shell {
+    padding: 12px;
+  }
+
+  .hero-stage-main,
+  .app-topbar,
+  .dashboard-card,
+  .people-summary-card,
+  .feature-card,
+  .ops-card,
+  .auth-card,
+  .hero-stage-card,
+  .people-card {
+    padding: 14px;
+  }
+
+  .hero-stage-bar,
+  .app-topbar,
+  .auth-footer,
+  .section-nav,
+  .landing-cta,
+  .dashboard-card-head,
+  .project-list-head,
+  .dashboard-list-row,
+  .financial-row-main,
+  .project-row-main,
+  .status-report-top,
+  .status-composer-head,
+  .skill-section-head,
+  .people-card-top,
+  .people-card-badges,
+  .people-detail-panel summary,
+  .match-row-top,
+  .status-comment-head,
+  .position-card-top,
+  .assignment-row-top,
+  .timesheet-section-head,
+  .timesheet-subsection-head,
+  .timesheet-editor-actions,
+  .timesheet-entry-main,
+  .timesheet-footer,
+  .people-directory-row,
+  .people-focus-head {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .hero-stage-bar h1,
+  .app-topbar-copy h1 {
+    font-size: 2rem;
+  }
+
+  .hero-showcase {
+    width: 100%;
+  }
+
+  .dashboard-row-side {
+    justify-content: flex-start;
+  }
+
+  .timesheet-week-link {
+    padding: 10px;
+  }
+
+  .timesheet-year-form {
+    grid-template-columns: 1fr;
+  }
+}

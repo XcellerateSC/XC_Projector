@@ -20,6 +20,7 @@ export default async function CustomerCreatePage({
   return (
     <ProjectsShell
       activeSection="customers"
+      compactChrome
       counts={{
         customers: workspace.customerRows.length,
         portfolios: workspace.portfolioRows.length,

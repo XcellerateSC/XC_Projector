@@ -49,6 +49,7 @@ Important design preference from user:
 - visual quality matters a lot
 - prefer a refined product UI over generic landing-page aesthetics
 - tighter spacing, smaller radii, sharper hierarchy
+- prefer compact list-like record views over large low-density cards on operational setup pages
 
 ## Implemented so far
 

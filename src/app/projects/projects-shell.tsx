@@ -37,7 +37,7 @@ const managerSections = [
 
 export function ProjectsShell({
   activeSection,
-  compactChrome = false,
+  compactChrome = true,
   counts,
   description,
   error,

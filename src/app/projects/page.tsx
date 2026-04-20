@@ -18,13 +18,27 @@ type ProjectsPageProps = {
 export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
   const { error, success } = await searchParams;
   const workspace = await loadProjectsWorkspace();
-  const activeProjects = workspace.projectRows.filter(
-    (project) => project.lifecycle_status === "active"
+  const lifecycleCounts = workspace.projectRows.reduce(
+    (counts, project) => {
+      counts[project.lifecycle_status] = (counts[project.lifecycle_status] ?? 0) + 1;
+      return counts;
+    },
+    {} as Record<string, number>
+  );
+  const staffedProjects = workspace.projectRows.filter((project) => project.profiles?.full_name).length;
+  const budgetedProjects = workspace.projectRows.filter(
+    (project) => project.project_financials?.declared_budget
   ).length;
+  const openEndedProjects = workspace.projectRows.filter((project) => !project.end_date).length;
+
+  function formatLifecycleLabel(value: string) {
+    return value.replaceAll("_", " ");
+  }
 
   return (
     <ProjectsShell
       activeSection="overview"
+      compactChrome
       counts={{
         customers: workspace.customerRows.length,
         portfolios: workspace.portfolioRows.length,
@@ -41,29 +55,34 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
     >
       <section className="workspace-grid project-hub-grid">
         <article className="panel dashboard-card project-hub-list">
-          <div className="dashboard-card-head">
+          <div className="project-list-head">
             <div>
               <div className="card-kicker">Current projects</div>
-              <h2>Delivery landscape</h2>
+              <h2>Current project list</h2>
+              <p className="card-copy">
+                The overview is tuned for fast portfolio scanning: ownership,
+                commercial setup and timing sit on the same row.
+              </p>
             </div>
-            <span className="pill pill--strong">{activeProjects} active</span>
-          </div>
-          <p className="card-copy">
-            Open an existing project to work inside the delivery detail. Use the
-            management pages only when the structural setup around projects
-            needs to change.
-          </p>
 
-          <div className="summary-strip">
-            <div>
-              <span>Projects</span>
-              <strong>{workspace.projectRows.length}</strong>
-            </div>
-            <div>
-              <span>Programs</span>
-              <strong>{workspace.programRows.length}</strong>
+            <div className="project-overview-chip-group">
+              <span className="tag">{staffedProjects} with lead</span>
+              <span className="tag">{budgetedProjects} with budget</span>
+              <span className="tag">{openEndedProjects} open-ended</span>
             </div>
           </div>
+
+          <div className="project-overview-table project-overview-table--header" aria-hidden="true">
+            <span>Project</span>
+            <span>Delivery lane</span>
+            <span>Timing</span>
+            <span>Commercial</span>
+          </div>
+
+          <p className="card-copy">
+            Open an existing project to work inside the delivery detail, or add
+            a new one on the right.
+          </p>
 
           <div className="project-list project-list--overview">
             {workspace.projectRows.length ? (
@@ -74,40 +93,54 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
                       <h3 className="project-row-title">
                         <Link href={`/projects/${project.id}`}>{project.name}</Link>
                       </h3>
-                      <p>
-                        {(project.portfolios?.name ?? "No portfolio") +
-                          (project.programs?.name ? ` / ${project.programs.name}` : "")}
-                      </p>
+                      <p>{project.profiles?.full_name ?? "No project lead assigned yet"}</p>
                     </div>
                     <span className="pill">
-                      {project.lifecycle_status.replaceAll("_", " ")}
+                      {formatLifecycleLabel(project.lifecycle_status)}
                     </span>
                   </div>
 
-                  <dl className="project-row-meta">
+                  <div className="project-overview-table">
                     <div>
-                      <dt>Customer</dt>
-                      <dd>
+                      <span className="project-overview-label">Delivery lane</span>
+                      <strong>
+                        {project.portfolios?.name ?? "No portfolio"}
+                        {project.programs?.name ? ` / ${project.programs.name}` : ""}
+                      </strong>
+                      <p>
                         {project.customers?.name ?? "No customer"}
                         {project.client_units?.name ? ` / ${project.client_units.name}` : ""}
-                      </dd>
+                      </p>
                     </div>
+
                     <div>
-                      <dt>Project lead</dt>
-                      <dd>{project.profiles?.full_name ?? "Not assigned"}</dd>
+                      <span className="project-overview-label">Timing</span>
+                      <strong>{formatProjectDate(project.start_date)}</strong>
+                      <p>until {formatProjectDate(project.end_date)}</p>
                     </div>
+
                     <div>
-                      <dt>Timeline</dt>
-                      <dd>
-                        {formatProjectDate(project.start_date)} -{" "}
-                        {formatProjectDate(project.end_date)}
-                      </dd>
+                      <span className="project-overview-label">Commercial</span>
+                      <strong>{formatProjectBudget(project.project_financials)}</strong>
+                      <p>{project.code ?? "No code assigned"}</p>
                     </div>
-                    <div>
-                      <dt>Budget</dt>
-                      <dd>{formatProjectBudget(project.project_financials)}</dd>
-                    </div>
-                  </dl>
+                  </div>
+
+                  <div className="project-readiness-strip">
+                    <span
+                      className={`tag${project.profiles?.full_name ? "" : " tag--focus"}`}
+                    >
+                      {project.profiles?.full_name ? "Lead covered" : "Lead missing"}
+                    </span>
+                    <span
+                      className={`tag${project.project_financials?.declared_budget ? "" : " tag--focus"}`}
+                    >
+                      {project.project_financials?.declared_budget ? "Budget captured" : "Budget open"}
+                    </span>
+                    <span className={`tag${project.end_date ? "" : " tag--focus"}`}>
+                      {project.end_date ? "End date fixed" : "End date open"}
+                    </span>
+                  </div>
                 </article>
               ))
             ) : (
@@ -120,13 +153,40 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         </article>
 
         <div className="project-hub-side">
+          <article className="panel dashboard-card project-portfolio-spotlight">
+            <div className="card-kicker">Portfolio scan</div>
+            <h2>Operational mix</h2>
+            <p className="card-copy">
+              A compact pulse view that mirrors the portfolio-style examples
+              without changing the product language.
+            </p>
+
+            <div className="summary-strip summary-strip--wide">
+              <div>
+                <span>Active</span>
+                <strong>{lifecycleCounts.active ?? 0}</strong>
+              </div>
+              <div>
+                <span>Planned</span>
+                <strong>{lifecycleCounts.planned ?? 0}</strong>
+              </div>
+              <div>
+                <span>On hold</span>
+                <strong>{lifecycleCounts.on_hold ?? 0}</strong>
+              </div>
+              <div>
+                <span>Completed</span>
+                <strong>{lifecycleCounts.completed ?? 0}</strong>
+              </div>
+            </div>
+          </article>
+
           <article className="panel dashboard-card">
             <div className="card-kicker">New project</div>
             <h2>Create a project shell</h2>
             <p className="card-copy">
-              The project overview keeps the current projects visible on the
-              left. New project setup stays on the right so the workflow is
-              consistent and easy to scan.
+              Create the project first. After saving, you will land directly in
+              that project&apos;s detail view.
             </p>
 
             {workspace.isPortfolioManager ? (
