@@ -2,6 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
+  SetupDetailPanel,
+  SetupSection,
+  SetupSelectionLink,
+  SetupSelectionPanel,
+  SetupWorkspace
+} from "../../setup-blueprint";
+import {
   createClientUnit,
   setCustomerActiveState,
   updateClientUnit,
@@ -27,7 +34,7 @@ export default async function CustomerDetailPage({
 }: CustomerDetailPageProps) {
   const { customerId } = await params;
   const { error, section, success } = await searchParams;
-  const workspace = await loadProjectsWorkspace();
+  const workspace = await loadProjectsWorkspace("customers");
   const selectedCustomer = workspace.customerRows.find(
     (customer) => customer.id === customerId
   );
@@ -46,6 +53,7 @@ export default async function CustomerDetailPage({
   return (
     <ProjectsShell
       activeSection="customers"
+      eyebrow="Customers"
       compactChrome
       counts={{
         customers: workspace.customerRows.length,
@@ -53,181 +61,184 @@ export default async function CustomerDetailPage({
         programs: workspace.programRows.length,
         projects: workspace.projectRows.length
       }}
-      description="Customers also use the same master-detail layout so commercial setup follows the same workflow as portfolios and programs."
+      description="Customers now follow the same clean master-detail workspace as Time and People."
       error={error}
       isPortfolioManager={workspace.isPortfolioManager}
       navItems={workspace.navItems}
       success={success}
-      title="Customer details"
+      title="Customer Details"
       userLabel={workspace.userLabel}
     >
-      <section className="workspace-grid project-hub-grid">
-        <article className="panel dashboard-card project-hub-list">
-          <div className="dashboard-card-head">
-            <div>
-              <div className="card-kicker">Customers</div>
-              <h2>Select a customer</h2>
-            </div>
-            {workspace.isPortfolioManager ? (
+      <SetupWorkspace>
+        <SetupSelectionPanel
+          action={
+            workspace.isPortfolioManager ? (
               <Link className="cta cta-secondary" href="/projects/customers/create">
                 Add customer
               </Link>
-            ) : null}
-          </div>
-          <p className="card-copy">
-            Choose the customer you want to maintain. The matching client units
-            and customer setup appear on the right.
-          </p>
+            ) : undefined
+          }
+          subtitle={`${workspace.customerRows.length} visible customers`}
+          title="Customer Selection"
+        >
+          {workspace.customerRows.map((customer) => {
+            const unitCount = workspace.clientUnitRows.filter(
+              (unit) => unit.customer_id === customer.id
+            ).length;
 
-          <div className="project-list project-list--overview">
-            {workspace.customerRows.map((customer) => (
-              <article
-                className={`project-row project-row--overview${
-                  customer.id === selectedCustomer.id ? " project-row--focus" : ""
-                }`}
+            return (
+              <SetupSelectionLink
+                dotTone={customer.is_active ? "good" : "muted"}
+                href={`/projects/customers/${customer.id}`}
                 key={customer.id}
-              >
-                <div className="project-row-main">
-                  <div>
-                    <h3 className="project-row-title">
-                      <Link href={`/projects/customers/${customer.id}`}>{customer.name}</Link>
-                    </h3>
-                    <p>{customer.legal_name ?? "No legal name captured"}</p>
+                selected={customer.id === selectedCustomer.id}
+                subtitle={`${customer.legal_name ?? "No legal name"} · ${unitCount} units`}
+                title={customer.name}
+                trailing={<span className="tag">{unitCount}</span>}
+              />
+            );
+          })}
+        </SetupSelectionPanel>
+
+        <SetupDetailPanel
+          metrics={[
+            { label: "Units", value: selectedUnits.length },
+            { label: "Projects", value: relatedProjects.length },
+            {
+              label: "Status",
+              value: selectedCustomer.is_active ? "Active" : "Inactive"
+            }
+          ]}
+          status={
+            <span
+              className={`setup-state-chip ${selectedCustomer.is_active ? "is-good" : "is-muted"}`}
+            >
+              <span className="setup-state-chip-dot" />
+              {selectedCustomer.is_active ? "Active" : "Inactive"}
+            </span>
+          }
+          subtitle={
+            selectedCustomer.legal_name ??
+            selectedCustomer.billing_notes ??
+            "Commercial customer record"
+          }
+          title={selectedCustomer.name}
+          titleLabel="Customer Status"
+        >
+          <SetupSection label="Customer Profile" meta="Commercial master data">
+            <article className="setup-entry-card">
+              {workspace.isPortfolioManager ? (
+                <>
+                  <form action={updateCustomer} className="setup-form-grid setup-form-grid--customer">
+                    <input name="customer_id" type="hidden" value={selectedCustomer.id} />
+                    <input
+                      name="redirect_to"
+                      type="hidden"
+                      value={`/projects/customers/${selectedCustomer.id}`}
+                    />
+                    <label className="field">
+                      <span>Name</span>
+                      <input defaultValue={selectedCustomer.name} name="name" required type="text" />
+                    </label>
+                    <label className="field">
+                      <span>Legal name</span>
+                      <input
+                        defaultValue={selectedCustomer.legal_name ?? ""}
+                        name="legal_name"
+                        type="text"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Billing notes</span>
+                      <input
+                        defaultValue={selectedCustomer.billing_notes ?? ""}
+                        name="billing_notes"
+                        type="text"
+                      />
+                    </label>
+                    <button className="cta cta-primary" type="submit">
+                      Save customer
+                    </button>
+                  </form>
+
+                  <form action={setCustomerActiveState} className="setup-divider-form">
+                    <input name="customer_id" type="hidden" value={selectedCustomer.id} />
+                    <input
+                      name="next_is_active"
+                      type="hidden"
+                      value={selectedCustomer.is_active ? "false" : "true"}
+                    />
+                    <input
+                      name="redirect_to"
+                      type="hidden"
+                      value={`/projects/customers/${selectedCustomer.id}`}
+                    />
+                    <button className="cta cta-secondary" type="submit">
+                      {selectedCustomer.is_active ? "Deactivate customer" : "Reactivate customer"}
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <p className="setup-empty-card">
+                  Customer maintenance is currently reserved for portfolio managers.
+                </p>
+              )}
+            </article>
+          </SetupSection>
+
+          <SetupSection label="Client Units" meta={`${selectedUnits.length} linked`}>
+            {workspace.isPortfolioManager ? (
+              <article className="setup-entry-card">
+                <form action={createClientUnit} className="setup-form-grid setup-form-grid--portfolio">
+                  <input name="customer_id" type="hidden" value={selectedCustomer.id} />
+                  <input
+                    name="redirect_to"
+                    type="hidden"
+                    value={`/projects/customers/${selectedCustomer.id}`}
+                  />
+                  <label className="field">
+                    <span>Client unit</span>
+                    <input name="name" placeholder="Finance Department" required type="text" />
+                  </label>
+                  <label className="field">
+                    <span>Description</span>
+                    <input
+                      name="description"
+                      placeholder="Optional internal unit context"
+                      type="text"
+                    />
+                  </label>
+                  <div className="setup-form-actions">
+                    <button className="cta cta-secondary" type="submit">
+                      Add client unit
+                    </button>
                   </div>
-                  <span className={`pill ${customer.is_active ? "pill--strong" : "pill--missing"}`}>
-                    {customer.is_active ? "Active" : "Inactive"}
-                  </span>
-                </div>
+                </form>
               </article>
-            ))}
-          </div>
-        </article>
-
-        <div className="project-hub-side">
-          <article className="panel dashboard-card">
-            <div className="card-kicker">Edit customer</div>
-            <h2>{selectedCustomer.name}</h2>
-            <p className="card-copy">
-              Maintain the customer record and commercial context on a dedicated
-              detail view.
-            </p>
-
-            {workspace.isPortfolioManager ? (
-              <>
-                <form action={updateCustomer} className="inline-form">
-                  <input name="customer_id" type="hidden" value={selectedCustomer.id} />
-                  <input
-                    name="redirect_to"
-                    type="hidden"
-                    value={`/projects/customers/${selectedCustomer.id}`}
-                  />
-                  <label className="field">
-                    <span>Name</span>
-                    <input defaultValue={selectedCustomer.name} name="name" required type="text" />
-                  </label>
-                  <label className="field">
-                    <span>Legal name</span>
-                    <input
-                      defaultValue={selectedCustomer.legal_name ?? ""}
-                      name="legal_name"
-                      type="text"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Billing notes</span>
-                    <input
-                      defaultValue={selectedCustomer.billing_notes ?? ""}
-                      name="billing_notes"
-                      type="text"
-                    />
-                  </label>
-                  <button className="cta cta-primary" type="submit">
-                    Save customer
-                  </button>
-                </form>
-
-                <form action={setCustomerActiveState} className="inline-form inline-form--divider">
-                  <input name="customer_id" type="hidden" value={selectedCustomer.id} />
-                  <input
-                    name="next_is_active"
-                    type="hidden"
-                    value={selectedCustomer.is_active ? "false" : "true"}
-                  />
-                  <input
-                    name="redirect_to"
-                    type="hidden"
-                    value={`/projects/customers/${selectedCustomer.id}`}
-                  />
-                  <button className="cta cta-secondary" type="submit">
-                    {selectedCustomer.is_active ? "Deactivate customer" : "Reactivate customer"}
-                  </button>
-                </form>
-              </>
-            ) : (
-              <p className="dashboard-inline-note">
-                Customer maintenance is currently reserved for portfolio
-                managers.
-              </p>
-            )}
-          </article>
-
-          <article className="panel dashboard-card">
-            <div className="card-kicker">Client units</div>
-            <h2>Units inside {selectedCustomer.name}</h2>
-            <p className="card-copy">
-              Keep the customer-specific client units together with the customer
-              record.
-            </p>
-
-            {workspace.isPortfolioManager ? (
-              <form action={createClientUnit} className="inline-form">
-                <input name="customer_id" type="hidden" value={selectedCustomer.id} />
-                <input
-                  name="redirect_to"
-                  type="hidden"
-                  value={`/projects/customers/${selectedCustomer.id}`}
-                />
-                <label className="field">
-                  <span>Client unit</span>
-                  <input name="name" placeholder="Finance Department" required type="text" />
-                </label>
-                <label className="field">
-                  <span>Description</span>
-                  <input name="description" placeholder="Optional internal unit context" type="text" />
-                </label>
-                <button className="cta cta-secondary" type="submit">
-                  Add client unit
-                </button>
-              </form>
             ) : null}
 
-            <div className="management-stack">
+            <div className="setup-entry-stack">
               {selectedUnits.length ? (
                 selectedUnits.map((unit) => (
-                  <article
-                    className={`project-row project-row--overview project-row--compact${
-                      section === "client-unit" ? " project-row--focus" : ""
-                    }`}
-                    key={unit.id}
-                  >
-                    <div className="project-row-main">
-                      <div>
-                        <h3 className="project-row-title">{unit.name}</h3>
-                        <p>{unit.description ?? "No description"}</p>
-                      </div>
+                  <article className="setup-entry-card" key={unit.id}>
+                    <div className="setup-entry-copy">
+                      <strong>{unit.name}</strong>
+                      <span>{unit.description ?? "No description"}</span>
                     </div>
 
                     {workspace.isPortfolioManager ? (
                       <form
                         action={updateClientUnit}
-                        className="inline-form inline-form--divider inline-form--compact"
+                        className="setup-form-grid setup-form-grid--portfolio setup-divider-form"
                       >
                         <input name="client_unit_id" type="hidden" value={unit.id} />
                         <input name="customer_id" type="hidden" value={selectedCustomer.id} />
                         <input
                           name="redirect_to"
                           type="hidden"
-                          value={`/projects/customers/${selectedCustomer.id}`}
+                          value={`/projects/customers/${selectedCustomer.id}${
+                            section === "client-unit" ? "?section=client-unit" : ""
+                          }`}
                         />
                         <label className="field">
                           <span>Client unit</span>
@@ -241,36 +252,44 @@ export default async function CustomerDetailPage({
                             type="text"
                           />
                         </label>
-                        <button className="cta cta-secondary" type="submit">
-                          Save client unit
-                        </button>
+                        <div className="setup-form-actions">
+                          <button className="cta cta-secondary" type="submit">
+                            Save client unit
+                          </button>
+                        </div>
                       </form>
                     ) : null}
                   </article>
                 ))
               ) : (
-                <div className="project-row project-row--empty">
+                <article className="setup-entry-card setup-entry-card--empty">
                   No client units yet for this customer.
-                </div>
+                </article>
               )}
             </div>
-          </article>
+          </SetupSection>
 
-          <article className="panel dashboard-card">
-            <div className="card-kicker">Impact</div>
-            <h2>Projects for this customer</h2>
-            <div className="dashboard-list">
-              <div className="dashboard-list-row">
-                <div>
+          <SetupSection label="Impact" meta="Commercial usage">
+            <div className="setup-impact-grid">
+              <article className="setup-entry-card setup-impact-card">
+                <div className="setup-impact-copy">
                   <strong>Assigned projects</strong>
                   <span>Projects currently linked to this customer</span>
                 </div>
                 <span className="pill">{relatedProjects.length}</span>
-              </div>
+              </article>
+
+              <article className="setup-entry-card setup-impact-card">
+                <div className="setup-impact-copy">
+                  <strong>Client units</strong>
+                  <span>Commercial sub-structures maintained for this customer</span>
+                </div>
+                <span className="pill">{selectedUnits.length}</span>
+              </article>
             </div>
-          </article>
-        </div>
-      </section>
+          </SetupSection>
+        </SetupDetailPanel>
+      </SetupWorkspace>
     </ProjectsShell>
   );
 }

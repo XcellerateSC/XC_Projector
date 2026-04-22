@@ -9,8 +9,15 @@ type ProjectsSectionKey =
   | "programs"
   | "customers";
 
+type ProjectsSectionItem = {
+  href: string;
+  key: ProjectsSectionKey;
+  label: string;
+};
+
 type ProjectsShellProps = {
   activeSection: ProjectsSectionKey;
+  eyebrow?: string;
   compactChrome?: boolean;
   counts: {
     customers: number;
@@ -22,6 +29,8 @@ type ProjectsShellProps = {
   error?: string;
   isPortfolioManager: boolean;
   navItems: Parameters<typeof AppFrame>[0]["navItems"];
+  sectionItems?: ProjectsSectionItem[];
+  showSectionNav?: boolean;
   success?: string;
   title: string;
   userLabel?: string | null;
@@ -33,24 +42,29 @@ const managerSections = [
   { href: "/projects/portfolios", key: "portfolios", label: "Portfolios" },
   { href: "/projects/programs", key: "programs", label: "Programs" },
   { href: "/projects/customers", key: "customers", label: "Customers" }
-] satisfies Array<{ href: string; key: ProjectsSectionKey; label: string }>;
+] satisfies ProjectsSectionItem[];
 
 export function ProjectsShell({
   activeSection,
+  eyebrow = "Projects",
   compactChrome = true,
   counts,
   description,
   error,
   isPortfolioManager,
   navItems,
+  sectionItems,
+  showSectionNav = true,
   success,
   title,
   userLabel,
   children
 }: ProjectsShellProps) {
-  const sections = isPortfolioManager
-    ? managerSections
-    : managerSections.filter((section) => section.key === "overview");
+  const sections = sectionItems ?? (
+    isPortfolioManager
+      ? managerSections
+      : managerSections.filter((section) => section.key === "overview")
+  );
 
   return (
     <AppFrame
@@ -62,30 +76,38 @@ export function ProjectsShell({
           <span className="topbar-chip">{counts.customers} customers</span>
         </div>
       }
+      contentClassName="app-content--fit-screen app-content--timesheet-blueprint"
       description={description}
-      eyebrow="Projects"
+      eyebrow={eyebrow}
       navItems={navItems}
-      topbarClassName={compactChrome ? "app-topbar--compact" : undefined}
+      shellClassName="app-shell--fit-screen app-shell--timesheet-blueprint"
+      topbarClassName={
+        compactChrome
+          ? "app-topbar--compact app-topbar--timesheet-blueprint"
+          : "app-topbar--timesheet-blueprint"
+      }
       title={title}
       userLabel={userLabel}
     >
       {error ? <p className="banner banner--error">{error}</p> : null}
       {success ? <p className="banner banner--success">{success}</p> : null}
 
-      <nav
-        aria-label="Projects sections"
-        className={`section-nav panel${compactChrome ? " section-nav--compact" : ""}`}
-      >
-        {sections.map((section) => (
-          <Link
-            className={`section-nav-item${section.key === activeSection ? " is-active" : ""}`}
-            href={section.href}
-            key={section.href}
-          >
-            {section.label}
-          </Link>
-        ))}
-      </nav>
+      {showSectionNav && sections.length > 1 ? (
+        <nav
+          aria-label="Projects sections"
+          className={`section-nav panel${compactChrome ? " section-nav--compact" : ""}`}
+        >
+          {sections.map((section) => (
+            <Link
+              className={`section-nav-item${section.key === activeSection ? " is-active" : ""}`}
+              href={section.href}
+              key={section.href}
+            >
+              {section.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
 
       {children}
     </AppFrame>

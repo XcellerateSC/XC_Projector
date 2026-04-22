@@ -174,6 +174,29 @@ function formatRoleLabel(role: string) {
   return role.replaceAll("_", " ");
 }
 
+function formatProfileListMeta(args: {
+  accessCount: number;
+  isCurrentProfile: boolean;
+  isPortfolioManager: boolean;
+  profile: EmployeeProfileRow;
+  skillCount: number;
+}) {
+  const parts = [
+    args.profile.job_title ?? args.profile.professional_grades?.name ?? "No title yet",
+    `${args.skillCount} skills`
+  ];
+
+  if (args.isPortfolioManager) {
+    parts.push(`${args.accessCount} grants`);
+  }
+
+  if (args.isCurrentProfile) {
+    parts.push("My profile");
+  }
+
+  return parts.join(" · ");
+}
+
 function buildSkillsByCategory(args: {
   categories: SkillCategoryRow[];
   skills: EmployeeSkillRow[];
@@ -394,8 +417,11 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
     categories: categoryRows,
     skills: selectedSkills
   });
+  const populatedSkillGroups = selectedSkillsByCategory.filter(({ skills }) => skills.length > 0);
   const canEditSelectedSkills =
     !!selectedProfile && (isPortfolioManager || selectedProfile.id === currentProfileId);
+  const leadCount = orderedProfileRows.filter((profile) => profile.system_role === "project_lead")
+    .length;
 
   return (
     <AppFrame
@@ -404,319 +430,368 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
           <span className="topbar-chip">{orderedProfileRows.length} people</span>
           <span className="topbar-chip">{activeProfileCount} active</span>
           <span className="topbar-chip">{profilesWithSkills} with skills</span>
-          <span className="topbar-chip">
-            {
-              orderedProfileRows.filter((profile) => profile.system_role === "project_lead")
-                .length
-            }{" "}
-            leads
-          </span>
+          <span className="topbar-chip">{leadCount} leads</span>
           {isPortfolioManager ? (
             <span className="topbar-chip">{scopedGrantCount} grants</span>
           ) : null}
         </div>
       }
-      description="Browse the roster on the left, then refine the selected profile on the right."
-      eyebrow="People"
+      contentClassName="app-content--fit-screen app-content--timesheet-blueprint"
+      description="Select a consultant and manage profile, skills and access in one compact workspace."
+      eyebrow="Consulting Roster"
       navItems={navItems}
-      title="Consulting roster"
-      topbarClassName="app-topbar--compact"
+      shellClassName="app-shell--fit-screen app-shell--timesheet-blueprint"
+      title="People"
+      topbarClassName="app-topbar--compact app-topbar--timesheet-blueprint"
       userLabel={currentProfile?.full_name ?? user.email}
     >
       {error ? <p className="banner banner--error">{error}</p> : null}
       {success ? <p className="banner banner--success">{success}</p> : null}
 
-      <section className="workspace-grid workspace-grid--project people-workspace">
-        <aside className="panel dashboard-card people-directory-panel">
-          <div className="dashboard-card-head">
-            <div>
-              <div className="card-kicker">Team directory</div>
-              <h2>Visible employees</h2>
+      <section className="people-app">
+        <div className="people-shell">
+          <aside className="panel people-selection-panel">
+            <div className="people-selection-head">
+              <div className="people-selection-title">
+                <span>People Selection</span>
+                <p>{orderedProfileRows.length} visible employees</p>
+              </div>
             </div>
-            <span className="pill">{orderedProfileRows.length}</span>
-          </div>
 
-          <div className="people-directory-list">
-            {orderedProfileRows.map((profile) => {
-              const skillCount = employeeSkillsByProfileId.get(profile.id)?.length ?? 0;
-              const accessCount = accessAssignmentsByProfileId.get(profile.id)?.length ?? 0;
+            <div className="people-selection-list">
+              {orderedProfileRows.map((profile) => {
+                const skillCount = employeeSkillsByProfileId.get(profile.id)?.length ?? 0;
+                const accessCount = accessAssignmentsByProfileId.get(profile.id)?.length ?? 0;
 
-              return (
-                <Link
-                  className={`people-directory-row${
-                    selectedProfile?.id === profile.id ? " is-selected" : ""
-                  }${profile.id === currentProfileId ? " is-current" : ""}`}
-                  href={`/people?profile=${profile.id}`}
-                  key={profile.id}
-                >
-                  <div className="people-directory-copy">
-                    <strong>{profile.full_name}</strong>
-                    <span>
-                      {profile.job_title ?? profile.professional_grades?.name ?? "No title yet"}
-                    </span>
-                  </div>
-                  <div className="people-directory-meta">
-                    <span className="tag">{skillCount} skills</span>
-                    {isPortfolioManager ? <span className="tag">{accessCount} grants</span> : null}
+                return (
+                  <Link
+                    className={`people-selection-link${
+                      selectedProfile?.id === profile.id ? " is-selected" : ""
+                    }${profile.id === currentProfileId ? " is-current" : ""}`}
+                    href={`/people?profile=${profile.id}`}
+                    key={profile.id}
+                    scroll={false}
+                  >
+                    <span className="people-selection-indicator" />
+
+                    <div className="people-selection-copy">
+                      <strong>{profile.full_name}</strong>
+                      <span>
+                        {formatProfileListMeta({
+                          accessCount,
+                          isCurrentProfile: profile.id === currentProfileId,
+                          isPortfolioManager,
+                          profile,
+                          skillCount
+                        })}
+                      </span>
+                    </div>
+
                     <span
-                      className={`people-directory-dot ${
+                      aria-hidden="true"
+                      className={`people-selection-dot ${
                         profile.is_active
-                          ? "people-directory-dot--active"
-                          : "people-directory-dot--inactive"
+                          ? "people-selection-dot--active"
+                          : "people-selection-dot--inactive"
                       }`}
                     />
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </aside>
+                  </Link>
+                );
+              })}
+            </div>
+          </aside>
 
-        <div className="people-main-stack people-main-stack--workspace">
-          {selectedProfile ? (
-            <>
-              <article className="panel dashboard-card people-focus-card">
-                <div className="people-focus-head">
-                  <div className="people-focus-copy">
-                    <div className="card-kicker">Selected profile</div>
-                    <h2>{selectedProfile.full_name}</h2>
+          <div className="people-main">
+            {selectedProfile ? (
+              <article className="panel people-detail-panel">
+                <header className="people-detail-header">
+                  <div className="people-detail-copy">
+                    <div className="people-status-title">
+                      <span>Profile Status</span>
+                      <h2>{selectedProfile.full_name}</h2>
+                      <p>
+                        {selectedProfile.job_title ??
+                          selectedProfile.professional_grades?.name ??
+                          formatRoleLabel(selectedProfile.system_role)}
+                        {selectedProfile.email ? ` · ${selectedProfile.email}` : ""}
+                      </p>
+                    </div>
                   </div>
-                  <div className="people-card-badges">
-                    <span className="pill">{formatRoleLabel(selectedProfile.system_role)}</span>
-                    <span
-                      className={`pill ${
-                        selectedProfile.is_active ? "pill--good" : "pill--missing"
-                      }`}
-                    >
-                      {selectedProfile.is_active ? "Active" : "Inactive"}
-                    </span>
-                    {selectedProfile.id === currentProfileId ? (
-                      <span className="tag tag--focus">My profile</span>
-                    ) : null}
-                  </div>
-                </div>
 
-                <dl className="people-profile-facts">
-                  <div>
-                    <dt>Role</dt>
-                    <dd>{formatRoleLabel(selectedProfile.system_role)}</dd>
-                  </div>
-                  <div>
-                    <dt>Business unit</dt>
-                    <dd>{selectedProfile.business_units?.name ?? "Not assigned"}</dd>
-                  </div>
-                  <div>
-                    <dt>Email</dt>
-                    <dd>{selectedProfile.email ?? "Not available"}</dd>
-                  </div>
-                  <div>
-                    <dt>Skills</dt>
-                    <dd>{selectedSkills.length}</dd>
-                  </div>
-                  <div>
-                    <dt>Location</dt>
-                    <dd>{selectedProfile.locations?.name ?? "Not assigned"}</dd>
-                  </div>
-                  <div>
-                    <dt>Access grants</dt>
-                    <dd>{selectedAccessAssignments.length}</dd>
-                  </div>
-                </dl>
-              </article>
+                  <div className="people-detail-head-side">
+                    <div className="people-status-strip">
+                      <div>
+                        <span>Role</span>
+                        <strong>{formatRoleLabel(selectedProfile.system_role)}</strong>
+                      </div>
+                      <div>
+                        <span>Skills</span>
+                        <strong>{selectedSkills.length}</strong>
+                      </div>
+                      <div>
+                        <span>Location</span>
+                        <strong>{selectedProfile.locations?.name ?? "Not assigned"}</strong>
+                      </div>
+                      <div>
+                        <span>Access</span>
+                        <strong>{selectedAccessAssignments.length}</strong>
+                      </div>
+                    </div>
 
-              <article className="panel dashboard-card people-editor-card">
-                <div className="people-editor-scroll">
-                  <section className="skill-section">
-                    <div className="skill-section-head">
-                      <strong>Skill profile</strong>
+                    <div className="people-detail-actions">
+                      <span
+                        className={`people-state-chip ${
+                          selectedProfile.is_active ? "is-active" : "is-inactive"
+                        }`}
+                      >
+                        <span className="people-state-chip-dot" />
+                        {selectedProfile.is_active ? "Active" : "Inactive"}
+                      </span>
+                      {selectedProfile.id === currentProfileId ? (
+                        <span className="people-state-chip is-focus">My profile</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </header>
+
+                <div className="people-detail-scroll">
+                  <section className="people-section">
+                    <div className="people-section-head">
+                      <strong>Profile</strong>
+                      <span>Core identity and staffing context</span>
+                    </div>
+
+                    <article className="people-entry-card people-profile-card">
+                      <dl className="people-profile-grid">
+                        <div>
+                          <dt>Email</dt>
+                          <dd>{selectedProfile.email ?? "Not available"}</dd>
+                        </div>
+                        <div>
+                          <dt>Business unit</dt>
+                          <dd>{selectedProfile.business_units?.name ?? "Not assigned"}</dd>
+                        </div>
+                        <div>
+                          <dt>Professional grade</dt>
+                          <dd>{selectedProfile.professional_grades?.name ?? "Not assigned"}</dd>
+                        </div>
+                        <div>
+                          <dt>Location</dt>
+                          <dd>{selectedProfile.locations?.name ?? "Not assigned"}</dd>
+                        </div>
+                        <div>
+                          <dt>Job title</dt>
+                          <dd>{selectedProfile.job_title ?? "Not assigned"}</dd>
+                        </div>
+                        <div>
+                          <dt>Access grants</dt>
+                          <dd>{selectedAccessAssignments.length}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  </section>
+
+                  <section className="people-section">
+                    <div className="people-section-head">
+                      <strong>Skill Profile</strong>
                       <span>{selectedSkills.length} captured</span>
                     </div>
 
-                    {selectedSkills.length ? (
-                      <div className="people-skill-grid">
-                        {selectedSkillsByCategory.map(({ category, skills }) => (
-                          <section className="people-skill-column" key={category.id}>
-                            <div className="people-skill-column-head">
+                    {populatedSkillGroups.length ? (
+                      <div className="people-skill-category-grid">
+                        {populatedSkillGroups.map(({ category, skills }) => (
+                          <section className="people-entry-card people-skill-card" key={category.id}>
+                            <div className="people-skill-card-head">
                               <strong>{category.name}</strong>
                               <span>{skills.length}</span>
                             </div>
 
-                            <div className="people-skill-column-list">
-                              {skills.length ? (
-                                skills.map((employeeSkill) => (
-                                  <div className="people-skill-row" key={employeeSkill.id}>
-                                    <div className="skill-badge-copy">
-                                      <strong>{employeeSkill.skills?.name ?? "Unknown skill"}</strong>
-                                      <span>{formatProficiencyLabel(employeeSkill.proficiency_score)}</span>
-                                    </div>
-
-                                    {canEditSelectedSkills ? (
-                                      <form action={removeEmployeeSkill}>
-                                        <input
-                                          name="employee_skill_id"
-                                          type="hidden"
-                                          value={employeeSkill.id}
-                                        />
-                                        <input
-                                          name="profile_id"
-                                          type="hidden"
-                                          value={selectedProfile.id}
-                                        />
-                                        <button className="skill-remove" type="submit">
-                                          Remove
-                                        </button>
-                                      </form>
-                                    ) : null}
+                            <div className="people-skill-list">
+                              {skills.map((employeeSkill) => (
+                                <div className="people-skill-item" key={employeeSkill.id}>
+                                  <div className="people-skill-copy">
+                                    <strong>{employeeSkill.skills?.name ?? "Unknown skill"}</strong>
+                                    <span>
+                                      {formatProficiencyLabel(employeeSkill.proficiency_score)}
+                                    </span>
                                   </div>
-                                ))
-                              ) : (
-                                <div className="skill-list-empty">No skills yet</div>
-                              )}
+
+                                  {canEditSelectedSkills ? (
+                                    <form action={removeEmployeeSkill}>
+                                      <input
+                                        name="employee_skill_id"
+                                        type="hidden"
+                                        value={employeeSkill.id}
+                                      />
+                                      <input
+                                        name="profile_id"
+                                        type="hidden"
+                                        value={selectedProfile.id}
+                                      />
+                                      <button className="skill-remove" type="submit">
+                                        Remove
+                                      </button>
+                                    </form>
+                                  ) : null}
+                                </div>
+                              ))}
                             </div>
                           </section>
                         ))}
                       </div>
                     ) : (
-                      <div className="skill-list-empty">
-                        No skills captured yet. Add the first one below to improve staffing
-                        and matching visibility.
-                      </div>
+                      <article className="people-entry-card people-entry-card--empty">
+                        No skills captured yet. Add the first one below to improve staffing and
+                        matching visibility.
+                      </article>
                     )}
                   </section>
 
                   {skillRows.length ? (
-                    <section className="skill-section">
-                      <div className="skill-section-head">
-                        <strong>Assign skill</strong>
-                        <span>Category and catalog skill</span>
+                    <section className="people-section">
+                      <div className="people-section-head">
+                        <strong>Assign Skill</strong>
+                        <span>Category, catalog skill and proficiency</span>
                       </div>
 
-                      <form action={saveEmployeeSkill} className="inline-form inline-form--row">
-                        <SkillProfileForm
-                          categories={categoryRows}
-                          profileId={selectedProfile.id}
-                          skills={skillRows.map((skill) => ({
-                            categoryId: skill.skill_category_id,
-                            categoryName: skill.skill_categories?.name ?? null,
-                            id: skill.id,
-                            name: skill.name
-                          }))}
-                        />
-                        <button className="cta cta-primary" type="submit">
-                          Assign skill
-                        </button>
-                      </form>
-                    </section>
-                  ) : null}
-
-                  {isPortfolioManager ? (
-                    <section className="skill-section">
-                      <div className="skill-section-head">
-                        <strong>Profile admin</strong>
-                        <span>Role, status and profile data</span>
-                      </div>
-
-                      <form action={updateProfileAdmin} className="inline-form inline-form--compact">
-                        <input name="profile_id" type="hidden" value={selectedProfile.id} />
-
-                        <label className="field">
-                          <span>System role</span>
-                          <select
-                            defaultValue={selectedProfile.system_role}
-                            name="system_role"
-                            required
-                          >
-                            <option value="employee">Employee</option>
-                            <option value="project_lead">Project lead</option>
-                            <option value="portfolio_manager">Portfolio manager</option>
-                          </select>
-                        </label>
-
-                        <label className="field">
-                          <span>Active state</span>
-                          <select
-                            defaultValue={selectedProfile.is_active ? "true" : "false"}
-                            name="is_active"
-                            required
-                          >
-                            <option value="true">Active</option>
-                            <option value="false">Inactive</option>
-                          </select>
-                        </label>
-
-                        <label className="field">
-                          <span>Professional grade</span>
-                          <select
-                            defaultValue={selectedProfile.professional_grade_id ?? ""}
-                            name="professional_grade_id"
-                          >
-                            <option value="">Not assigned</option>
-                            {gradeRows.map((grade) => (
-                              <option key={grade.id} value={grade.id}>
-                                {grade.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="field">
-                          <span>Business unit</span>
-                          <select
-                            defaultValue={selectedProfile.business_unit_id ?? ""}
-                            name="business_unit_id"
-                          >
-                            <option value="">Not assigned</option>
-                            {businessUnitRows.map((unit) => (
-                              <option key={unit.id} value={unit.id}>
-                                {unit.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="field">
-                          <span>Location</span>
-                          <select
-                            defaultValue={selectedProfile.location_id ?? ""}
-                            name="location_id"
-                          >
-                            <option value="">Not assigned</option>
-                            {locationRows.map((location) => (
-                              <option key={location.id} value={location.id}>
-                                {location.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="field">
-                          <span>Job title</span>
-                          <input
-                            defaultValue={selectedProfile.job_title ?? ""}
-                            name="job_title"
-                            type="text"
+                      <article className="people-entry-card">
+                        <form
+                          action={saveEmployeeSkill}
+                          className="people-form-grid people-form-grid--skill"
+                        >
+                          <SkillProfileForm
+                            categories={categoryRows}
+                            profileId={selectedProfile.id}
+                            skills={skillRows.map((skill) => ({
+                              categoryId: skill.skill_category_id,
+                              categoryName: skill.skill_categories?.name ?? null,
+                              id: skill.id,
+                              name: skill.name
+                            }))}
                           />
-                        </label>
-
-                        <button className="cta cta-secondary" type="submit">
-                          Save profile admin
-                        </button>
-                      </form>
+                          <button className="cta cta-primary" type="submit">
+                            Assign skill
+                          </button>
+                        </form>
+                      </article>
                     </section>
                   ) : null}
 
                   {isPortfolioManager ? (
-                    <section className="skill-section">
-                      <div className="skill-section-head">
-                        <strong>Context access</strong>
+                    <section className="people-section">
+                      <div className="people-section-head">
+                        <strong>Profile Admin</strong>
+                        <span>Role, status and profile metadata</span>
+                      </div>
+
+                      <article className="people-entry-card">
+                        <form
+                          action={updateProfileAdmin}
+                          className="people-form-grid people-form-grid--admin"
+                        >
+                          <input name="profile_id" type="hidden" value={selectedProfile.id} />
+
+                          <label className="field">
+                            <span>System role</span>
+                            <select
+                              defaultValue={selectedProfile.system_role}
+                              name="system_role"
+                              required
+                            >
+                              <option value="employee">Employee</option>
+                              <option value="project_lead">Project lead</option>
+                              <option value="portfolio_manager">Portfolio manager</option>
+                            </select>
+                          </label>
+
+                          <label className="field">
+                            <span>Active state</span>
+                            <select
+                              defaultValue={selectedProfile.is_active ? "true" : "false"}
+                              name="is_active"
+                              required
+                            >
+                              <option value="true">Active</option>
+                              <option value="false">Inactive</option>
+                            </select>
+                          </label>
+
+                          <label className="field">
+                            <span>Professional grade</span>
+                            <select
+                              defaultValue={selectedProfile.professional_grade_id ?? ""}
+                              name="professional_grade_id"
+                            >
+                              <option value="">Not assigned</option>
+                              {gradeRows.map((grade) => (
+                                <option key={grade.id} value={grade.id}>
+                                  {grade.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="field">
+                            <span>Business unit</span>
+                            <select
+                              defaultValue={selectedProfile.business_unit_id ?? ""}
+                              name="business_unit_id"
+                            >
+                              <option value="">Not assigned</option>
+                              {businessUnitRows.map((unit) => (
+                                <option key={unit.id} value={unit.id}>
+                                  {unit.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="field">
+                            <span>Location</span>
+                            <select
+                              defaultValue={selectedProfile.location_id ?? ""}
+                              name="location_id"
+                            >
+                              <option value="">Not assigned</option>
+                              {locationRows.map((location) => (
+                                <option key={location.id} value={location.id}>
+                                  {location.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="field">
+                            <span>Job title</span>
+                            <input
+                              defaultValue={selectedProfile.job_title ?? ""}
+                              name="job_title"
+                              type="text"
+                            />
+                          </label>
+
+                          <div className="people-form-actions people-form-actions--full">
+                            <button className="cta cta-secondary" type="submit">
+                              Save profile admin
+                            </button>
+                          </div>
+                        </form>
+                      </article>
+                    </section>
+                  ) : null}
+
+                  {isPortfolioManager ? (
+                    <section className="people-section">
+                      <div className="people-section-head">
+                        <strong>Context Access</strong>
                         <span>{selectedAccessAssignments.length} grants</span>
                       </div>
 
                       {selectedAccessAssignments.length ? (
-                        <div className="access-chip-list">
+                        <div className="people-entry-stack">
                           {selectedAccessAssignments.map((assignment) => (
-                            <div className="access-chip" key={assignment.id}>
-                              <div className="skill-badge-copy">
+                            <article className="people-entry-card people-access-card" key={assignment.id}>
+                              <div className="people-access-copy">
                                 <strong>{formatAccessAssignmentLabel(assignment)}</strong>
                                 <span>Scoped management visibility</span>
                               </div>
@@ -731,97 +806,109 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                                   Remove
                                 </button>
                               </form>
-                            </div>
+                            </article>
                           ))}
                         </div>
                       ) : (
-                        <div className="skill-list-empty">
+                        <article className="people-entry-card people-entry-card--empty">
                           No scoped access grants yet. Employees rely on their global role and
                           staffing visibility.
-                        </div>
+                        </article>
                       )}
 
-                      <form action={createAccessAssignment} className="inline-form inline-form--compact">
-                        <input name="profile_id" type="hidden" value={selectedProfile.id} />
+                      <article className="people-entry-card">
+                        <form
+                          action={createAccessAssignment}
+                          className="people-form-grid people-form-grid--access"
+                        >
+                          <input name="profile_id" type="hidden" value={selectedProfile.id} />
 
-                        <label className="field field--full">
-                          <span>Add scope</span>
-                          <select name="scope_ref" required>
-                            <option value="">Select portfolio, program or project</option>
-                            {portfolioRows.map((portfolio) => (
-                              <option
-                                key={`portfolio:${portfolio.id}`}
-                                value={`portfolio:${portfolio.id}`}
-                              >
-                                {`Portfolio / ${portfolio.name}`}
-                              </option>
-                            ))}
-                            {programRows.map((program) => (
-                              <option key={`program:${program.id}`} value={`program:${program.id}`}>
-                                {`Program / ${program.name}`}
-                              </option>
-                            ))}
-                            {projectLookupRows.map((project) => (
-                              <option key={`project:${project.id}`} value={`project:${project.id}`}>
-                                {`Project / ${project.name}`}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                          <label className="field field--full">
+                            <span>Add scope</span>
+                            <select name="scope_ref" required>
+                              <option value="">Select portfolio, program or project</option>
+                              {portfolioRows.map((portfolio) => (
+                                <option
+                                  key={`portfolio:${portfolio.id}`}
+                                  value={`portfolio:${portfolio.id}`}
+                                >
+                                  {`Portfolio / ${portfolio.name}`}
+                                </option>
+                              ))}
+                              {programRows.map((program) => (
+                                <option key={`program:${program.id}`} value={`program:${program.id}`}>
+                                  {`Program / ${program.name}`}
+                                </option>
+                              ))}
+                              {projectLookupRows.map((project) => (
+                                <option key={`project:${project.id}`} value={`project:${project.id}`}>
+                                  {`Project / ${project.name}`}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
 
-                        <button className="cta cta-secondary" type="submit">
-                          Grant access
-                        </button>
-                      </form>
+                          <div className="people-form-actions people-form-actions--full">
+                            <button className="cta cta-secondary" type="submit">
+                              Grant access
+                            </button>
+                          </div>
+                        </form>
+                      </article>
                     </section>
                   ) : null}
 
-                  <section className="skill-section">
-                    <div className="skill-section-head">
-                      <strong>Skill catalog</strong>
+                  <section className="people-section">
+                    <div className="people-section-head">
+                      <strong>Skill Catalog</strong>
                       <span>{skillRows.length} active skills</span>
                     </div>
 
                     {isPortfolioManager ? (
-                      <form action={createSkill} className="inline-form inline-form--row">
-                        <label className="field">
-                          <span>Category</span>
-                          <select name="skill_category_id" required>
-                            <option value="">Select category</option>
-                            {categoryRows.map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                      <article className="people-entry-card">
+                        <form
+                          action={createSkill}
+                          className="people-form-grid people-form-grid--catalog"
+                        >
+                          <label className="field">
+                            <span>Category</span>
+                            <select name="skill_category_id" required>
+                              <option value="">Select category</option>
+                              {categoryRows.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
 
-                        <label className="field">
-                          <span>Skill name</span>
-                          <input name="name" placeholder="Scrum Mastery" required type="text" />
-                        </label>
+                          <label className="field">
+                            <span>Skill name</span>
+                            <input name="name" placeholder="Scrum Mastery" required type="text" />
+                          </label>
 
-                        <label className="field">
-                          <span>Description</span>
-                          <input
-                            name="description"
-                            placeholder="Optional explanation or scope note"
-                            type="text"
-                          />
-                        </label>
+                          <label className="field">
+                            <span>Description</span>
+                            <input
+                              name="description"
+                              placeholder="Optional explanation or scope note"
+                              type="text"
+                            />
+                          </label>
 
-                        <button className="cta cta-primary" type="submit">
-                          Add catalog entry
-                        </button>
-                      </form>
+                          <button className="cta cta-primary" type="submit">
+                            Add catalog entry
+                          </button>
+                        </form>
+                      </article>
                     ) : (
-                      <p className="card-copy">
-                        Catalog changes stay with portfolio managers. You can still enrich your
-                        own profile with the available skills.
-                      </p>
+                      <article className="people-entry-card people-entry-card--empty">
+                        Catalog changes stay with portfolio managers. You can still enrich your own
+                        profile with the available skills.
+                      </article>
                     )}
 
-                    <div className="tag-list">
+                    <div className="people-tag-list">
                       {categoryRows.map((category) => (
                         <span className="tag" key={category.id}>
                           {category.name}
@@ -831,17 +918,24 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                   </section>
                 </div>
               </article>
-            </>
-          ) : (
-            <article className="panel dashboard-card people-focus-card">
-              <div className="card-kicker">People</div>
-              <h2>No visible employee found</h2>
-              <p className="card-copy">
-                The roster is currently empty for this user. Once profiles are visible, they will
-                appear in the left directory.
-              </p>
-            </article>
-          )}
+            ) : (
+              <article className="panel people-detail-panel people-detail-panel--empty">
+                <div className="people-detail-scroll">
+                  <section className="people-section">
+                    <div className="people-section-head">
+                      <strong>People</strong>
+                      <span>No visible employee found</span>
+                    </div>
+
+                    <article className="people-entry-card people-entry-card--empty">
+                      The roster is currently empty for this user. Once profiles are visible, they
+                      will appear in the left selection list.
+                    </article>
+                  </section>
+                </div>
+              </article>
+            )}
+          </div>
         </div>
       </section>
     </AppFrame>
