@@ -1,5 +1,12 @@
 import Link from "next/link";
 
+import {
+  SetupDetailPanel,
+  SetupSection,
+  SetupSelectionLink,
+  SetupSelectionPanel,
+  SetupWorkspace
+} from "../../setup-blueprint";
 import { createCustomer } from "../../actions";
 import { loadProjectsWorkspace } from "../../project-data";
 import { ProjectsShell } from "../../projects-shell";
@@ -15,11 +22,12 @@ export default async function CustomerCreatePage({
   searchParams
 }: CustomerCreatePageProps) {
   const { error, success } = await searchParams;
-  const workspace = await loadProjectsWorkspace();
+  const workspace = await loadProjectsWorkspace("customers");
 
   return (
     <ProjectsShell
       activeSection="customers"
+      eyebrow="Customers"
       compactChrome
       counts={{
         customers: workspace.customerRows.length,
@@ -27,85 +35,111 @@ export default async function CustomerCreatePage({
         programs: workspace.programRows.length,
         projects: workspace.projectRows.length
       }}
-      description="Create a new customer from a focused screen, then continue directly in the clearer customer detail view."
+      description="Create customers inside the same blueprint workspace used by the detail screens."
       error={error}
       isPortfolioManager={workspace.isPortfolioManager}
       navItems={workspace.navItems}
       success={success}
-      title="Create customer"
+      title="Create Customer"
       userLabel={workspace.userLabel}
     >
-      <section className="workspace-grid project-hub-grid">
-        <article className="panel dashboard-card project-hub-list">
-          <div className="card-kicker">Existing customers</div>
-          <h2>Current customer list</h2>
-          <p className="card-copy">
-            Open an existing customer to maintain it, or add a new one on the
-            right.
-          </p>
+      <SetupWorkspace>
+        <SetupSelectionPanel
+          subtitle={`${workspace.customerRows.length} existing customers`}
+          title="Customer Selection"
+        >
+          {workspace.customerRows.length ? (
+            workspace.customerRows.map((customer) => {
+              const unitCount = workspace.clientUnitRows.filter(
+                (unit) => unit.customer_id === customer.id
+              ).length;
 
-          <div className="project-list project-list--overview">
-            {workspace.customerRows.length ? (
-              workspace.customerRows.map((customer) => (
-                <article className="project-row project-row--overview" key={customer.id}>
-                  <div className="project-row-main">
-                    <div>
-                      <h3 className="project-row-title">
-                        <Link href={`/projects/customers/${customer.id}`}>{customer.name}</Link>
-                      </h3>
-                      <p>{customer.legal_name ?? "No legal name captured"}</p>
+              return (
+                <SetupSelectionLink
+                  dotTone={customer.is_active ? "good" : "muted"}
+                  href={`/projects/customers/${customer.id}`}
+                  key={customer.id}
+                  subtitle={`${customer.legal_name ?? "No legal name"} · ${unitCount} units`}
+                  title={customer.name}
+                  trailing={<span className="tag">{unitCount}</span>}
+                />
+              );
+            })
+          ) : (
+            <article className="setup-entry-card setup-entry-card--empty">
+              No customers yet. Create the first one from the panel on the right.
+            </article>
+          )}
+        </SetupSelectionPanel>
+
+        <SetupDetailPanel
+          metrics={[
+            { label: "Customers", value: workspace.customerRows.length },
+            { label: "Projects", value: workspace.projectRows.length },
+            { label: "Mode", value: "Create" }
+          ]}
+          status={
+            <span className="setup-state-chip is-focus">
+              <span className="setup-state-chip-dot" />
+              New record
+            </span>
+          }
+          subtitle="Add a commercial customer record, then continue directly in its detail workspace."
+          title="Create customer"
+          titleLabel="Customer Status"
+        >
+          <SetupSection label="New Customer" meta="Commercial master data">
+            <article className="setup-entry-card">
+              {workspace.isPortfolioManager ? (
+                <form action={createCustomer} className="setup-form-grid setup-form-grid--customer">
+                  <input name="redirect_to" type="hidden" value="/projects/customers/create" />
+                  <label className="field">
+                    <span>Customer name</span>
+                    <input name="name" placeholder="Auto AG" required type="text" />
+                  </label>
+                  <label className="field">
+                    <span>Legal name</span>
+                    <input name="legal_name" placeholder="Auto AG Holding" type="text" />
+                  </label>
+                  <label className="field">
+                    <span>Billing notes</span>
+                    <input name="billing_notes" placeholder="Optional billing context" type="text" />
+                  </label>
+                  <button className="cta cta-primary" type="submit">
+                    Create customer
+                  </button>
+                </form>
+              ) : (
+                <p className="setup-empty-card">
+                  Customer maintenance is currently reserved for portfolio managers.
+                </p>
+              )}
+            </article>
+          </SetupSection>
+
+          <SetupSection label="Browse Existing" meta="Jump into an existing record">
+            <div className="setup-entry-stack">
+              {workspace.customerRows.length ? (
+                workspace.customerRows.slice(0, 6).map((customer) => (
+                  <article className="setup-entry-card setup-entry-card--row" key={customer.id}>
+                    <div className="setup-entry-copy">
+                      <strong>{customer.name}</strong>
+                      <span>{customer.legal_name ?? "No legal name captured"}</span>
                     </div>
-                    <span className={`pill ${customer.is_active ? "pill--strong" : "pill--missing"}`}>
-                      {customer.is_active ? "Active" : "Inactive"}
-                    </span>
-                  </div>
+                    <Link className="cta cta-secondary" href={`/projects/customers/${customer.id}`}>
+                      Open
+                    </Link>
+                  </article>
+                ))
+              ) : (
+                <article className="setup-entry-card setup-entry-card--empty">
+                  No customer records exist yet.
                 </article>
-              ))
-            ) : (
-              <div className="project-row project-row--empty">
-                No customers yet. Create the first one from the panel on the
-                right.
-              </div>
-            )}
-          </div>
-        </article>
-
-        <div className="project-hub-side">
-          <article className="panel dashboard-card">
-            <div className="card-kicker">New customer</div>
-            <h2>Add a customer record</h2>
-            <p className="card-copy">
-              Create the customer first. After saving, you will land directly in
-              that customer&apos;s detail view.
-            </p>
-
-            {workspace.isPortfolioManager ? (
-              <form action={createCustomer} className="inline-form">
-                <input name="redirect_to" type="hidden" value="/projects/customers/create" />
-                <label className="field">
-                  <span>Customer name</span>
-                  <input name="name" placeholder="Auto AG" required type="text" />
-                </label>
-                <label className="field">
-                  <span>Legal name</span>
-                  <input name="legal_name" placeholder="Auto AG Holding" type="text" />
-                </label>
-                <label className="field">
-                  <span>Billing notes</span>
-                  <input name="billing_notes" placeholder="Optional billing context" type="text" />
-                </label>
-                <button className="cta cta-primary" type="submit">
-                  Create customer
-                </button>
-              </form>
-            ) : (
-              <p className="dashboard-inline-note">
-                Customer maintenance is currently reserved for portfolio managers.
-              </p>
-            )}
-          </article>
-        </div>
-      </section>
+              )}
+            </div>
+          </SetupSection>
+        </SetupDetailPanel>
+      </SetupWorkspace>
     </ProjectsShell>
   );
 }

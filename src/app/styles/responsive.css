@@ -12,6 +12,9 @@
   .ops-grid,
   .people-card,
   .people-meta,
+  .project-charter-highlight-row,
+  .project-overview-copy--inline,
+  .project-row-meta--three-up,
   .project-form-grid,
   .position-detail-grid,
   .assignment-management-grid,
@@ -23,6 +26,7 @@
   .status-rating-grid,
   .timesheet-entry-controls,
   .timesheet-entry-row,
+  .project-workspace,
   .inline-form--row {
     grid-template-columns: 1fr;
   }
@@ -32,6 +36,7 @@
   .summary-strip,
   .people-meta--compact,
   .timesheet-status-bar,
+  .timesheet-summary-grid,
   .people-profile-facts,
   .people-skill-grid {
     grid-template-columns: 1fr;
@@ -45,13 +50,114 @@
     grid-template-columns: 1fr;
   }
 
+  .setup-workspace,
+  .people-shell,
   .people-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .timesheet-detail-header,
+  .timesheet-detail-head-side,
+  .people-detail-header,
+  .people-detail-head-side,
+  .setup-detail-header,
+  .setup-detail-head-side {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .timesheet-status-strip {
+    flex-direction: column;
+    width: 100%;
+    align-items: start;
+  }
+
+  .timesheet-status-strip > div {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .timesheet-status-strip > div + div {
+    padding-top: 10px;
+    border-top: 1px solid rgba(5, 83, 115, 0.08);
+    border-left: 0;
+  }
+
+  .people-status-strip {
+    flex-direction: column;
+    width: 100%;
+    align-items: start;
+  }
+
+  .setup-status-strip {
+    flex-direction: column;
+    width: 100%;
+    align-items: start;
+  }
+
+  .people-status-strip > div {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .setup-status-strip > div {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .people-status-strip > div + div {
+    padding-top: 10px;
+    border-top: 1px solid rgba(5, 83, 115, 0.08);
+    border-left: 0;
+  }
+
+  .setup-status-strip > div + div {
+    padding-top: 10px;
+    border-top: 1px solid rgba(5, 83, 115, 0.08);
+    border-left: 0;
+  }
+
+  .timesheet-detail-actions {
+    justify-content: flex-start;
+  }
+
+  .people-detail-actions {
+    justify-content: flex-start;
+  }
+
+  .setup-detail-actions {
+    justify-content: flex-start;
+  }
+
+  .timesheet-entry-controls {
+    grid-column: auto;
+  }
+
+  .people-profile-grid,
+  .people-skill-category-grid,
+  .setup-impact-grid,
+  .people-form-grid--skill,
+  .people-form-grid--catalog,
+  .people-form-grid--admin,
+  .setup-form-grid--two,
+  .setup-form-grid--three,
+  .setup-form-grid--customer,
+  .setup-form-grid--portfolio,
+  .setup-form-grid--program {
     grid-template-columns: 1fr;
   }
 
   .landing-cta {
     flex-direction: column;
     align-items: start;
+  }
+
+  .project-overview-column,
+  .project-overview-mini-list,
+  .project-detail-body {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
   }
 }
 
@@ -113,9 +219,13 @@
   .landing-cta,
   .dashboard-card-head,
   .project-list-head,
+  .project-directory-head,
   .dashboard-list-row,
   .financial-row-main,
   .project-row-main,
+  .project-hub-header,
+  .project-section-head,
+  .status-report-row,
   .status-report-top,
   .status-composer-head,
   .skill-section-head,
@@ -132,7 +242,11 @@
   .timesheet-entry-main,
   .timesheet-footer,
   .people-directory-row,
-  .people-focus-head {
+  .people-focus-head,
+  .timesheet-detail-actions,
+  .setup-selection-link,
+  .setup-entry-card--row,
+  .setup-impact-card {
     flex-direction: column;
     align-items: start;
   }
@@ -156,5 +270,24 @@
 
   .timesheet-year-form {
     grid-template-columns: 1fr;
+  }
+
+  .timesheet-detail-scroll,
+  .timesheet-week-list {
+    padding-right: 0;
+  }
+
+  .timesheet-week-link {
+    align-items: start;
+  }
+
+  .people-selection-link,
+  .project-directory-row {
+    align-items: start;
+  }
+
+  .project-hub-tabs {
+    justify-content: flex-start;
+    width: 100%;
   }
 }

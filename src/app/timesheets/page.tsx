@@ -307,10 +307,10 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
   const assignmentRows = (assignmentWeeks as AssignmentWeekRow[] | null) ?? [];
   const internalAccountRows = (internalTypes as InternalTimeAccountRow[] | null) ?? [];
   const capacityPercent = (capacityRows as CapacityRow[] | null)?.[0]?.capacity_percent ?? 100;
+  const capturedHours = entryRows.reduce((sum, entry) => sum + Number(entry.hours), 0);
   const targetHours =
     timesheet?.target_hours ??
     Number(((FULL_TIME_HOURS_PER_WEEK * Number(capacityPercent)) / 100).toFixed(2));
-  const capturedHours = entryRows.reduce((sum, entry) => sum + Number(entry.hours), 0);
   const remainingHours = Number((targetHours - capturedHours).toFixed(2));
   const remainingDisplayHours = Math.max(remainingHours, 0);
   const isSubmitted = timesheet?.status === "submitted";
@@ -324,6 +324,20 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
     visibleTimesheets: (visibleTimesheets as WeekListTimesheetRow[] | null) ?? []
   });
   const yearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
+  const timesheetStateLabel = isSubmitted
+    ? "Submitted"
+    : isFutureWeek
+      ? "Future week"
+      : canSubmit
+        ? "Ready to submit"
+        : "Open";
+  const timesheetStateClassName = isSubmitted
+    ? "is-submitted"
+    : isFutureWeek
+      ? "is-future"
+      : canSubmit
+        ? "is-ready"
+        : "is-open";
 
   return (
     <AppFrame
@@ -334,13 +348,13 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
           <span className="topbar-chip">{internalAccountRows.length} internal accounts</span>
         </div>
       }
-      contentClassName="app-content--fit-screen"
+      contentClassName="app-content--fit-screen app-content--timesheet-blueprint"
       description="Select a week and capture time in one compact workspace."
       eyebrow="Weekly timesheets"
       navItems={navItems}
-      shellClassName="app-shell--fit-screen"
+      shellClassName="app-shell--fit-screen app-shell--timesheet-blueprint"
       title="Time Sheets"
-      topbarClassName="app-topbar--compact"
+      topbarClassName="app-topbar--compact app-topbar--timesheet-blueprint"
       userLabel={profile?.full_name ?? user.email}
     >
       {error ? <p className="banner banner--error">{error}</p> : null}
@@ -348,23 +362,25 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
 
       <section className="timesheet-app">
         <section className="workspace-grid workspace-grid--project timesheet-shell">
-          <aside className="panel dashboard-card timesheet-week-panel">
-            <div className="card-kicker">Week selection</div>
-            <form className="timesheet-year-form">
-              <label className="field">
-                <span>Year</span>
-                <select defaultValue={String(selectedYear)} name="year">
+          <aside className="panel timesheet-week-panel">
+            <div className="timesheet-week-panel-head">
+              <div className="card-kicker">Week selection</div>
+              <form className="timesheet-year-form">
+                <select aria-label="Year" defaultValue={String(selectedYear)} name="year">
                   {yearOptions.map((optionYear) => (
                     <option key={optionYear} value={optionYear}>
                       {optionYear}
                     </option>
                   ))}
                 </select>
-              </label>
-              <button className="cta cta-secondary" type="submit">
-                Go
-              </button>
-            </form>
+                <button className="cta cta-secondary" type="submit">
+                  Go
+                </button>
+              </form>
+              <div aria-hidden="true" className="timesheet-week-panel-subline">
+                {formatWeekRange(selectedWeekStart)}
+              </div>
+            </div>
 
             <div className="timesheet-week-list">
               {weekSelection.map((weekEntry) => (
@@ -375,27 +391,32 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
                   href={`/timesheets?year=${selectedYear}&week=${weekEntry.weekStart}`}
                   key={weekEntry.weekStart}
                 >
+                  <span aria-hidden="true" className="timesheet-week-indicator" />
                   <div className="timesheet-week-copy">
                     <strong>{weekEntry.label}</strong>
                     <span>{weekEntry.rangeLabel}</span>
                   </div>
+
                   <span className={`timesheet-week-dot timesheet-week-dot--${weekEntry.status}`} />
                 </Link>
               ))}
             </div>
           </aside>
 
-          <div className="timesheet-main-stack">
-            <section className="panel dashboard-card timesheet-overview-card timesheet-overview-card--compact">
-              <div className="timesheet-status-bar">
-                <div>
-                  <div className="card-kicker">Week status</div>
-                  <h2>
-                    {formatWeekLabel(selectedWeekStart)} - {formatWeekRange(selectedWeekStart)}
-                  </h2>
-                </div>
+          <form className="panel timesheet-detail-panel" key={selectedWeekStart}>
+            <input name="week_start" type="hidden" value={selectedWeekStart} />
 
-                <div className="summary-strip summary-strip--wide timesheet-summary-strip">
+            <header className="timesheet-detail-header">
+              <div className="timesheet-detail-copy">
+                <div className="card-kicker">Week status</div>
+                <div className="timesheet-status-title">
+                  <h2>{formatWeekLabel(selectedWeekStart)}</h2>
+                  <p>{formatWeekRange(selectedWeekStart)}</p>
+                </div>
+              </div>
+
+              <div className="timesheet-detail-head-side">
+                <div className="timesheet-status-strip">
                   <div>
                     <span>Captured</span>
                     <strong>{formatHours(capturedHours)}</strong>
@@ -410,21 +431,35 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
                   </div>
                 </div>
 
-                <span
-                  className={`pill timesheet-status-pill ${
-                    isSubmitted
-                      ? "pill--good"
-                      : isFutureWeek
-                        ? "pill--neutral"
-                        : canSubmit
-                          ? "pill--partial"
-                          : "pill--missing"
-                  }`}
-                >
-                  {isSubmitted ? "Submitted" : canSubmit && !isFutureWeek ? "Complete" : "Open"}
-                </span>
-              </div>
+                <div className="timesheet-detail-actions">
+                  <span className={`timesheet-state-chip ${timesheetStateClassName}`}>
+                    <span className="timesheet-state-chip-dot" />
+                    {timesheetStateLabel}
+                  </span>
 
+                  {!isSubmitted ? (
+                    <div className="cta-row">
+                      <button
+                        className="cta cta-secondary"
+                        formAction={saveTimesheetDraft}
+                        type="submit"
+                      >
+                        Save draft
+                      </button>
+                      <button
+                        className="cta cta-primary"
+                        formAction={submitWeeklyTimesheet}
+                        type="submit"
+                      >
+                        Submit week
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </header>
+
+            <div className="timesheet-detail-scroll">
               {!isSubmitted && !isFutureWeek && remainingHours > 0 ? (
                 <div className="warning-box timesheet-inline-note">
                   <strong>{formatHours(remainingDisplayHours)} open.</strong>
@@ -437,171 +472,136 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
                   The week is fully covered. Submit it once all booked entries have a description.
                 </div>
               ) : null}
-            </section>
 
-            <form className="timesheet-layout" key={selectedWeekStart}>
-              <input name="week_start" type="hidden" value={selectedWeekStart} />
-
-              <section className="timesheet-section panel timesheet-editor">
-                <div className="timesheet-section-head timesheet-editor-head">
-                  <div className="card-kicker">Time entries</div>
-                  <div className="timesheet-editor-actions">
-                    <span className="pill">
-                      {assignmentRows.length + internalAccountRows.length} rows
-                    </span>
-                    {!isSubmitted ? (
-                      <div className="cta-row">
-                        <button
-                          className="cta cta-secondary"
-                          formAction={saveTimesheetDraft}
-                          type="submit"
-                        >
-                          Save draft
-                        </button>
-                        <button
-                          className="cta cta-primary"
-                          formAction={submitWeeklyTimesheet}
-                          type="submit"
-                        >
-                          Submit week
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
+              <section className="timesheet-content-card">
+                <div className="timesheet-subsection-head">
+                  <strong>Project time</strong>
+                  <span>{assignmentRows.length} active</span>
                 </div>
 
-                <div className="timesheet-editor-body">
-                  <div className="timesheet-entry-group">
-                    <div className="timesheet-subsection-head">
-                      <strong>Project time</strong>
-                      <span>{assignmentRows.length} active</span>
-                    </div>
+                <div className="timesheet-entry-stack">
+                  {assignmentRows.length ? (
+                    assignmentRows.map((row) => {
+                      const assignment = row.project_assignments;
 
-                    <div className="timesheet-entry-stack">
-                      {assignmentRows.length ? (
-                        assignmentRows.map((row) => {
-                          const assignment = row.project_assignments;
+                      if (!assignment) {
+                        return null;
+                      }
 
-                          if (!assignment) {
-                            return null;
-                          }
-
-                          const existing = projectEntryMap.get(assignment.id);
-
-                          return (
-                            <article className="timesheet-entry-card" key={assignment.id}>
-                              <div className="timesheet-entry-row">
-                                <div className="timesheet-entry-main">
-                                  <div className="timesheet-entry-copy">
-                                    <h3>{assignment.project_positions?.projects?.name ?? "Unknown project"}</h3>
-                                    <p>{assignment.project_positions?.title ?? "Unknown position"}</p>
-                                  </div>
-                                  <div className="assignment-chip-group">
-                                    <span className="pill">{formatHours(Number(row.assigned_hours))}</span>
-                                    <span className="pill">
-                                      {formatPercent(row.assigned_allocation_percent)}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="timesheet-entry-controls">
-                                  <label className="field timesheet-field-hours">
-                                    <span>Hours</span>
-                                    <input
-                                      defaultValue={existing?.hours ?? ""}
-                                      disabled={isSubmitted}
-                                      min="0"
-                                      name={`project_hours__${assignment.id}`}
-                                      step="0.25"
-                                      type="number"
-                                    />
-                                  </label>
-
-                                  <label className="field timesheet-field-description">
-                                    <span>Description</span>
-                                    <input
-                                      defaultValue={existing?.description ?? ""}
-                                      disabled={isSubmitted}
-                                      name={`project_description__${assignment.id}`}
-                                      placeholder="What did you work on during this week?"
-                                      type="text"
-                                    />
-                                  </label>
-                                </div>
-                              </div>
-                            </article>
-                          );
-                        })
-                      ) : (
-                        <article className="timesheet-entry-card timesheet-entry-card--empty">
-                          No staffed project assignments are active for this week. You can
-                          still submit a full week using internal time accounts only.
-                        </article>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="timesheet-entry-group">
-                    <div className="timesheet-subsection-head">
-                      <strong>Internal time</strong>
-                      <span>{internalAccountRows.length} available</span>
-                    </div>
-
-                    <div className="timesheet-entry-stack">
-                      {internalAccountRows.map((account) => {
-                        const existing = internalEntryMap.get(account.id);
+                      const existing = projectEntryMap.get(assignment.id);
 
                       return (
-                        <article className="timesheet-entry-card" key={account.id}>
+                        <article className="timesheet-entry-card" key={assignment.id}>
                           <div className="timesheet-entry-row">
                             <div className="timesheet-entry-main">
                               <div className="timesheet-entry-copy">
-                                <h3>{account.name}</h3>
-                                <p>{account.description ?? "Internal allocation bucket"}</p>
+                                <h3>{assignment.project_positions?.projects?.name ?? "Unknown project"}</h3>
+                                <p>{assignment.project_positions?.title ?? "Unknown position"}</p>
+                              </div>
+                              <div className="assignment-chip-group">
+                                <span className="pill">{formatHours(Number(row.assigned_hours))}</span>
+                                <span className="pill">
+                                  {formatPercent(row.assigned_allocation_percent)}
+                                </span>
                               </div>
                             </div>
 
                             <div className="timesheet-entry-controls">
                               <label className="field timesheet-field-hours">
                                 <span>Hours</span>
-                                  <input
-                                    defaultValue={existing?.hours ?? ""}
-                                    disabled={isSubmitted}
-                                    min="0"
-                                    name={`internal_hours__${account.id}`}
-                                    step="0.25"
-                                    type="number"
-                                  />
-                                </label>
+                                <input
+                                  defaultValue={existing?.hours ?? ""}
+                                  disabled={isSubmitted}
+                                  min="0"
+                                  name={`project_hours__${assignment.id}`}
+                                  step="0.25"
+                                  type="number"
+                                />
+                              </label>
 
                               <label className="field timesheet-field-description">
-                                <span>
-                                  Description
-                                  {account.requires_description ? (
-                                    <strong className="field-required-marker" aria-hidden="true">
-                                      *
-                                    </strong>
-                                  ) : null}
-                                </span>
+                                <span>Description</span>
                                 <input
                                   defaultValue={existing?.description ?? ""}
                                   disabled={isSubmitted}
-                                  name={`internal_description__${account.id}`}
-                                    placeholder="Why was this time booked here?"
-                                    type="text"
-                                  />
-                                </label>
-                              </div>
+                                  name={`project_description__${assignment.id}`}
+                                  placeholder="What did you work on during this week?"
+                                  type="text"
+                                />
+                              </label>
                             </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  </div>
+                          </div>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <article className="timesheet-entry-card timesheet-entry-card--empty">
+                      No staffed project assignments are active for this week. You can still
+                      submit a full week using internal time accounts only.
+                    </article>
+                  )}
                 </div>
               </section>
-            </form>
-          </div>
+
+              <section className="timesheet-content-card">
+                <div className="timesheet-subsection-head">
+                  <strong>Internal time</strong>
+                  <span>{internalAccountRows.length} available</span>
+                </div>
+
+                <div className="timesheet-entry-stack">
+                  {internalAccountRows.map((account) => {
+                    const existing = internalEntryMap.get(account.id);
+
+                    return (
+                      <article className="timesheet-entry-card" key={account.id}>
+                        <div className="timesheet-entry-row">
+                          <div className="timesheet-entry-main">
+                            <div className="timesheet-entry-copy">
+                              <h3>{account.name}</h3>
+                              <p>{account.description ?? "Internal allocation bucket"}</p>
+                            </div>
+                          </div>
+
+                          <div className="timesheet-entry-controls">
+                            <label className="field timesheet-field-hours">
+                              <span>Hours</span>
+                              <input
+                                defaultValue={existing?.hours ?? ""}
+                                disabled={isSubmitted}
+                                min="0"
+                                name={`internal_hours__${account.id}`}
+                                step="0.25"
+                                type="number"
+                              />
+                            </label>
+
+                            <label className="field timesheet-field-description">
+                              <span>
+                                Description
+                                {account.requires_description ? (
+                                  <strong className="field-required-marker" aria-hidden="true">
+                                    *
+                                  </strong>
+                                ) : null}
+                              </span>
+                              <input
+                                defaultValue={existing?.description ?? ""}
+                                disabled={isSubmitted}
+                                name={`internal_description__${account.id}`}
+                                placeholder="Why was this time booked here?"
+                                type="text"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          </form>
         </section>
       </section>
     </AppFrame>
