@@ -13,6 +13,12 @@
   .people-card,
   .people-meta,
   .project-charter-highlight-row,
+  .project-workbench-meta,
+  .project-signal-strip,
+  .project-module-strip,
+  .project-cockpit-grid,
+  .project-performance-grid,
+  .project-performance-table-row,
   .project-overview-copy--inline,
   .project-row-meta--three-up,
   .project-form-grid,
@@ -34,6 +40,7 @@
   .stat-grid,
   .metric-row,
   .summary-strip,
+  .project-performance-summary,
   .people-meta--compact,
   .timesheet-status-bar,
   .timesheet-summary-grid,
@@ -62,6 +69,13 @@
   .people-detail-head-side,
   .setup-detail-header,
   .setup-detail-head-side {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .project-workbench-heading,
+  .project-workbench-actions,
+  .project-directory-head-actions {
     flex-direction: column;
     align-items: start;
   }
@@ -158,6 +172,14 @@
     height: auto;
     min-height: auto;
     overflow: visible;
+  }
+
+  .project-workspace--rail-open {
+    grid-template-columns: minmax(220px, 0.32fr) minmax(0, 1fr);
+  }
+
+  .project-workspace--rail-collapsed {
+    grid-template-columns: 72px minmax(0, 1fr);
   }
 }
 
@@ -260,6 +282,11 @@
     width: 100%;
   }
 
+  .project-workspace--rail-open,
+  .project-workspace--rail-collapsed {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-row-side {
     justify-content: flex-start;
   }
@@ -284,6 +311,20 @@
   .people-selection-link,
   .project-directory-row {
     align-items: start;
+  }
+
+  .project-cockpit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .project-cockpit-summary {
+    text-align: left;
+    justify-items: start;
+  }
+
+  .project-switcher-trigger {
+    min-width: 0;
+    width: 100%;
   }
 
   .project-hub-tabs {

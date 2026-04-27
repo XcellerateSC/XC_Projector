@@ -39,6 +39,7 @@ export default async function CustomerCreatePage({
       error={error}
       isPortfolioManager={workspace.isPortfolioManager}
       navItems={workspace.navItems}
+      showSectionNav={false}
       success={success}
       title="Create Customer"
       userLabel={workspace.userLabel}
@@ -57,7 +58,7 @@ export default async function CustomerCreatePage({
               return (
                 <SetupSelectionLink
                   dotTone={customer.is_active ? "good" : "muted"}
-                  href={`/projects/customers/${customer.id}`}
+                  href={`/customers/${customer.id}`}
                   key={customer.id}
                   subtitle={`${customer.legal_name ?? "No legal name"} · ${unitCount} units`}
                   title={customer.name}
@@ -92,7 +93,7 @@ export default async function CustomerCreatePage({
             <article className="setup-entry-card">
               {workspace.isPortfolioManager ? (
                 <form action={createCustomer} className="setup-form-grid setup-form-grid--customer">
-                  <input name="redirect_to" type="hidden" value="/projects/customers/create" />
+                  <input name="redirect_to" type="hidden" value="/customers/create" />
                   <label className="field">
                     <span>Customer name</span>
                     <input name="name" placeholder="Auto AG" required type="text" />
@@ -126,7 +127,7 @@ export default async function CustomerCreatePage({
                       <strong>{customer.name}</strong>
                       <span>{customer.legal_name ?? "No legal name captured"}</span>
                     </div>
-                    <Link className="cta cta-secondary" href={`/projects/customers/${customer.id}`}>
+                    <Link className="cta cta-secondary" href={`/customers/${customer.id}`}>
                       Open
                     </Link>
                   </article>

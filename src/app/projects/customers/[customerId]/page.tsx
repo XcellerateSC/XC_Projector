@@ -65,6 +65,7 @@ export default async function CustomerDetailPage({
       error={error}
       isPortfolioManager={workspace.isPortfolioManager}
       navItems={workspace.navItems}
+      showSectionNav={false}
       success={success}
       title="Customer Details"
       userLabel={workspace.userLabel}
@@ -73,7 +74,7 @@ export default async function CustomerDetailPage({
         <SetupSelectionPanel
           action={
             workspace.isPortfolioManager ? (
-              <Link className="cta cta-secondary" href="/projects/customers/create">
+              <Link className="cta cta-secondary" href="/customers/create">
                 Add customer
               </Link>
             ) : undefined
@@ -89,7 +90,7 @@ export default async function CustomerDetailPage({
             return (
               <SetupSelectionLink
                 dotTone={customer.is_active ? "good" : "muted"}
-                href={`/projects/customers/${customer.id}`}
+                href={`/customers/${customer.id}`}
                 key={customer.id}
                 selected={customer.id === selectedCustomer.id}
                 subtitle={`${customer.legal_name ?? "No legal name"} · ${unitCount} units`}
@@ -134,7 +135,7 @@ export default async function CustomerDetailPage({
                     <input
                       name="redirect_to"
                       type="hidden"
-                      value={`/projects/customers/${selectedCustomer.id}`}
+                      value={`/customers/${selectedCustomer.id}`}
                     />
                     <label className="field">
                       <span>Name</span>
@@ -171,7 +172,7 @@ export default async function CustomerDetailPage({
                     <input
                       name="redirect_to"
                       type="hidden"
-                      value={`/projects/customers/${selectedCustomer.id}`}
+                      value={`/customers/${selectedCustomer.id}`}
                     />
                     <button className="cta cta-secondary" type="submit">
                       {selectedCustomer.is_active ? "Deactivate customer" : "Reactivate customer"}
@@ -194,7 +195,7 @@ export default async function CustomerDetailPage({
                   <input
                     name="redirect_to"
                     type="hidden"
-                    value={`/projects/customers/${selectedCustomer.id}`}
+                    value={`/customers/${selectedCustomer.id}`}
                   />
                   <label className="field">
                     <span>Client unit</span>
@@ -236,7 +237,7 @@ export default async function CustomerDetailPage({
                         <input
                           name="redirect_to"
                           type="hidden"
-                          value={`/projects/customers/${selectedCustomer.id}${
+                          value={`/customers/${selectedCustomer.id}${
                             section === "client-unit" ? "?section=client-unit" : ""
                           }`}
                         />

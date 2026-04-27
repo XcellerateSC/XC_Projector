@@ -27,7 +27,7 @@ export default async function PortfolioCreatePage({
   return (
     <ProjectsShell
       activeSection="portfolios"
-      eyebrow="Portfolios & Programs"
+      eyebrow="Portfolios"
       compactChrome
       counts={{
         customers: workspace.customerRows.length,
@@ -39,10 +39,7 @@ export default async function PortfolioCreatePage({
       error={error}
       isPortfolioManager={workspace.isPortfolioManager}
       navItems={workspace.navItems}
-      sectionItems={[
-        { href: "/projects/portfolios", key: "portfolios", label: "Portfolios" },
-        { href: "/projects/programs", key: "programs", label: "Programs" }
-      ]}
+      showSectionNav={false}
       success={success}
       title="Create Portfolio"
       userLabel={workspace.userLabel}
@@ -55,7 +52,7 @@ export default async function PortfolioCreatePage({
           {workspace.portfolioRows.length ? (
             workspace.portfolioRows.map((portfolio) => (
               <SetupSelectionLink
-                href={`/projects/portfolios/${portfolio.id}`}
+                href={`/portfolios/${portfolio.id}`}
                 key={portfolio.id}
                 subtitle={`${portfolio.code ?? "No code"} · ${
                   workspace.programRows.filter((program) => program.portfolio_id === portfolio.id)
@@ -91,7 +88,7 @@ export default async function PortfolioCreatePage({
             <article className="setup-entry-card">
               {workspace.isPortfolioManager ? (
                 <form action={createPortfolio} className="setup-form-grid setup-form-grid--portfolio">
-                  <input name="redirect_to" type="hidden" value="/projects/portfolios/create" />
+                  <input name="redirect_to" type="hidden" value="/portfolios/create" />
                   <label className="field">
                     <span>Name</span>
                     <input name="name" placeholder="Advisory Portfolio 2026" required type="text" />
@@ -125,7 +122,7 @@ export default async function PortfolioCreatePage({
                       <strong>{portfolio.name}</strong>
                       <span>{portfolio.code ?? "No portfolio code"}</span>
                     </div>
-                    <Link className="cta cta-secondary" href={`/projects/portfolios/${portfolio.id}`}>
+                    <Link className="cta cta-secondary" href={`/portfolios/${portfolio.id}`}>
                       Open
                     </Link>
                   </article>

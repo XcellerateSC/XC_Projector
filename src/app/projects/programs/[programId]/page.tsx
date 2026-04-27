@@ -28,7 +28,7 @@ export default async function ProgramDetailPage({
 }: ProgramDetailPageProps) {
   const { programId } = await params;
   const { error, success } = await searchParams;
-  const workspace = await loadProjectsWorkspace("portfolio");
+  const workspace = await loadProjectsWorkspace("programs");
   const selectedProgram = workspace.programRows.find((program) => program.id === programId);
 
   if (!selectedProgram) {
@@ -45,7 +45,7 @@ export default async function ProgramDetailPage({
   return (
     <ProjectsShell
       activeSection="programs"
-      eyebrow="Portfolios & Programs"
+      eyebrow="Programs"
       compactChrome
       counts={{
         customers: workspace.customerRows.length,
@@ -57,10 +57,7 @@ export default async function ProgramDetailPage({
       error={error}
       isPortfolioManager={workspace.isPortfolioManager}
       navItems={workspace.navItems}
-      sectionItems={[
-        { href: "/projects/portfolios", key: "portfolios", label: "Portfolios" },
-        { href: "/projects/programs", key: "programs", label: "Programs" }
-      ]}
+      showSectionNav={false}
       success={success}
       title="Program Details"
       userLabel={workspace.userLabel}
@@ -69,7 +66,7 @@ export default async function ProgramDetailPage({
         <SetupSelectionPanel
           action={
             workspace.isPortfolioManager ? (
-              <Link className="cta cta-secondary" href="/projects/programs/create">
+              <Link className="cta cta-secondary" href="/programs/create">
                 Add program
               </Link>
             ) : undefined
@@ -84,7 +81,7 @@ export default async function ProgramDetailPage({
 
             return (
               <SetupSelectionLink
-                href={`/projects/programs/${program.id}`}
+                href={`/programs/${program.id}`}
                 key={program.id}
                 selected={program.id === selectedProgram.id}
                 subtitle={`${portfolioName}${program.code ? ` · ${program.code}` : ""}`}
@@ -126,7 +123,7 @@ export default async function ProgramDetailPage({
                   <input
                     name="redirect_to"
                     type="hidden"
-                    value={`/projects/programs/${selectedProgram.id}`}
+                    value={`/programs/${selectedProgram.id}`}
                   />
                   <label className="field">
                     <span>Portfolio</span>

@@ -10,6 +10,12 @@ type ActionSuccess = "portfolio" | "program" | "customer" | "client-unit" | "pro
 const allowedRedirectPaths = new Set([
   "/projects",
   "/projects/new",
+  "/portfolios",
+  "/portfolios/create",
+  "/programs",
+  "/programs/create",
+  "/customers",
+  "/customers/create",
   "/projects/portfolios",
   "/projects/portfolios/create",
   "/projects/programs",
@@ -23,7 +29,7 @@ function isAllowedRedirectPath(value: string) {
     return true;
   }
 
-  return /^\/projects\/(portfolios|programs|customers)\/[0-9a-f-]+$/i.test(value);
+  return /^\/(?:(?:projects\/)?(portfolios|programs|customers))\/[0-9a-f-]+$/i.test(value);
 }
 
 function redirectWithMessage(
@@ -110,6 +116,9 @@ function readRedirectPath(formData: FormData) {
 function revalidateProjectPages() {
   revalidatePath("/projects");
   revalidatePath("/projects/new");
+  revalidatePath("/portfolios");
+  revalidatePath("/programs");
+  revalidatePath("/customers");
   revalidatePath("/projects/portfolios");
   revalidatePath("/projects/programs");
   revalidatePath("/projects/customers");
@@ -165,9 +174,9 @@ export async function createPortfolio(formData: FormData) {
 
   revalidateProjectPages();
 
-  if (redirectTo === "/projects/portfolios/create") {
+  if (redirectTo === "/projects/portfolios/create" || redirectTo === "/portfolios/create") {
     redirectWithMessage(
-      `/projects/portfolios/${portfolio.id}`,
+      `/portfolios/${portfolio.id}`,
       "success",
       `Portfolio "${name}" created.`,
       "portfolio"
@@ -227,9 +236,9 @@ export async function createProgram(formData: FormData) {
 
   revalidateProjectPages();
 
-  if (redirectTo === "/projects/programs/create") {
+  if (redirectTo === "/projects/programs/create" || redirectTo === "/programs/create") {
     redirectWithMessage(
-      `/projects/programs/${program.id}`,
+      `/programs/${program.id}`,
       "success",
       `Program "${name}" created.`,
       "program"
@@ -289,9 +298,9 @@ export async function createCustomer(formData: FormData) {
 
   revalidateProjectPages();
 
-  if (redirectTo === "/projects/customers/create") {
+  if (redirectTo === "/projects/customers/create" || redirectTo === "/customers/create") {
     redirectWithMessage(
-      `/projects/customers/${customer.id}`,
+      `/customers/${customer.id}`,
       "success",
       `Customer "${name}" created.`,
       "customer"

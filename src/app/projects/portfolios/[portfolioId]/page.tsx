@@ -47,7 +47,7 @@ export default async function PortfolioDetailPage({
   return (
     <ProjectsShell
       activeSection="portfolios"
-      eyebrow="Portfolios & Programs"
+      eyebrow="Portfolios"
       compactChrome
       counts={{
         customers: workspace.customerRows.length,
@@ -59,10 +59,7 @@ export default async function PortfolioDetailPage({
       error={error}
       isPortfolioManager={workspace.isPortfolioManager}
       navItems={workspace.navItems}
-      sectionItems={[
-        { href: "/projects/portfolios", key: "portfolios", label: "Portfolios" },
-        { href: "/projects/programs", key: "programs", label: "Programs" }
-      ]}
+      showSectionNav={false}
       success={success}
       title="Portfolio Details"
       userLabel={workspace.userLabel}
@@ -71,7 +68,7 @@ export default async function PortfolioDetailPage({
         <SetupSelectionPanel
           action={
             workspace.isPortfolioManager ? (
-              <Link className="cta cta-secondary" href="/projects/portfolios/create">
+              <Link className="cta cta-secondary" href="/portfolios/create">
                 Add portfolio
               </Link>
             ) : undefined
@@ -81,7 +78,7 @@ export default async function PortfolioDetailPage({
         >
           {workspace.portfolioRows.map((portfolio) => (
             <SetupSelectionLink
-              href={`/projects/portfolios/${portfolio.id}`}
+              href={`/portfolios/${portfolio.id}`}
               key={portfolio.id}
               selected={portfolio.id === selectedPortfolio.id}
               subtitle={`${portfolio.code ?? "No code"} · ${
@@ -125,7 +122,7 @@ export default async function PortfolioDetailPage({
                   <input
                     name="redirect_to"
                     type="hidden"
-                    value={`/projects/portfolios/${selectedPortfolio.id}`}
+                    value={`/portfolios/${selectedPortfolio.id}`}
                   />
                   <label className="field">
                     <span>Name</span>
@@ -164,7 +161,7 @@ export default async function PortfolioDetailPage({
                       <strong>{program.name}</strong>
                       <span>{program.code ?? "No code"}</span>
                     </div>
-                    <Link className="cta cta-secondary" href={`/projects/programs/${program.id}`}>
+                    <Link className="cta cta-secondary" href={`/programs/${program.id}`}>
                       Open
                     </Link>
                   </article>

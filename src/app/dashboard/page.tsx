@@ -2,10 +2,25 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppFrame } from "@/components/app-frame";
+import { BlueprintPage } from "@/components/blueprint-page";
+import { requireSignedInProfile } from "@/lib/access";
+import { buildProfileFirstName, buildProfileInitials, formatSystemRoleLabel } from "@/lib/profile";
 import { buildPrimaryNav } from "@/lib/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  FULL_TIME_HOURS_PER_WEEK,
+  formatWeekRange,
+  isDateRangeActiveForWeek,
+  normalizeWeekStart,
+  shiftWeek
+} from "@/lib/work-week";
 
 import { logout } from "../login/actions";
+import {
+  SetupDetailPanel,
+  SetupSection,
+  SetupSelectionPanel,
+  SetupWorkspace
+} from "../projects/setup-blueprint";
 
 type AccessAssignmentRow = {
   portfolio_id: string | null;
@@ -111,71 +126,8 @@ type LeadershipProjectSignal = {
   withoutPositions: boolean;
 };
 
-const FULL_TIME_HOURS_PER_WEEK = 40;
-
-function normalizeWeekStart(date: Date) {
-  const copy = new Date(date);
-  const day = copy.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  copy.setUTCDate(copy.getUTCDate() + diff);
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-}
-
-function shiftWeek(weekStart: string, amount: number) {
-  const next = new Date(`${weekStart}T00:00:00.000Z`);
-  next.setUTCDate(next.getUTCDate() + amount * 7);
-  return next.toISOString().slice(0, 10);
-}
-
-function formatWeekRange(weekStart: string) {
-  const start = new Date(`${weekStart}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 4);
-
-  return `${new Intl.DateTimeFormat("de-CH", {
-    day: "2-digit",
-    month: "2-digit"
-  }).format(start)} - ${new Intl.DateTimeFormat("de-CH", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(end)}`;
-}
-
-function formatRoleLabel(role: string | null | undefined) {
-  if (!role) {
-    return "Profile incomplete";
-  }
-
-  return role
-    .split("_")
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(" ");
-}
-
 function formatHours(value: number) {
   return `${value.toFixed(1)}h`;
-}
-
-function buildInitials(name: string | null | undefined, email: string | null | undefined) {
-  const source = name?.trim() || email?.trim() || "User";
-  const parts = source
-    .replace(/@.*/, "")
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  return parts.map((part) => part.charAt(0).toUpperCase()).join("") || "U";
-}
-
-function isDateRangeActiveForWeek(startDate: string, endDate: string | null, weekStart: string) {
-  const weekEnd = shiftWeek(weekStart, 1);
-  const inclusiveWeekEnd = new Date(`${weekEnd}T00:00:00.000Z`);
-  inclusiveWeekEnd.setUTCDate(inclusiveWeekEnd.getUTCDate() - 1);
-  const weekEndString = inclusiveWeekEnd.toISOString().slice(0, 10);
-
-  return startDate <= weekEndString && (!endDate || endDate >= weekStart);
 }
 
 function calculateCurrentWeekStatus(args: {
@@ -197,7 +149,6 @@ function calculateCurrentWeekStatus(args: {
     return {
       label: "Up to date",
       detail: "Your current week is submitted.",
-      pillClassName: "pill--good",
       remainingHours,
       targetHours,
       capturedHours
@@ -208,7 +159,6 @@ function calculateCurrentWeekStatus(args: {
     return {
       label: "Ready to submit",
       detail: "Your week is fully captured and can be submitted.",
-      pillClassName: "pill--partial",
       remainingHours,
       targetHours,
       capturedHours
@@ -219,7 +169,6 @@ function calculateCurrentWeekStatus(args: {
     return {
       label: "Still open",
       detail: "There is still time missing in the current week.",
-      pillClassName: "pill--missing",
       remainingHours,
       targetHours,
       capturedHours
@@ -229,7 +178,6 @@ function calculateCurrentWeekStatus(args: {
   return {
     label: "No week activity yet",
     detail: "No active assignments or timesheet entries exist for the current week.",
-    pillClassName: "pill--good",
     remainingHours,
     targetHours,
     capturedHours
@@ -237,31 +185,18 @@ function calculateCurrentWeekStatus(args: {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const { profile, supabase, user } = await requireSignedInProfile();
 
   const currentWeekStart = normalizeWeekStart(new Date()).toISOString().slice(0, 10);
   const recentWeekCutoff = shiftWeek(currentWeekStart, -5);
 
   const [
-    { data: profile },
     { data: accessAssignments },
     { data: currentUserAssignments },
     { data: recentTimesheets },
     { data: currentCapacityRows },
     { data: visibleProjects }
   ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name, system_role")
-      .eq("id", user.id)
-      .maybeSingle(),
     supabase
       .from("access_assignments")
       .select("portfolio_id, program_id, project_id")
@@ -334,8 +269,9 @@ export default async function DashboardPage() {
 
   const navItems = buildPrimaryNav("dashboard");
   const displayName = profile?.full_name ?? user.email ?? "User";
-  const roleLabel = formatRoleLabel(profile?.system_role);
-  const initials = buildInitials(profile?.full_name, user.email);
+  const firstName = buildProfileFirstName(profile?.full_name, user.email);
+  const roleLabel = formatSystemRoleLabel(profile?.system_role);
+  const initials = buildProfileInitials(profile?.full_name, user.email);
   const accessRows = (accessAssignments as AccessAssignmentRow[] | null) ?? [];
   const currentAssignmentRows = (currentUserAssignments as CurrentUserAssignmentRow[] | null) ?? [];
   const recentTimesheetRows = (recentTimesheets as TimesheetRow[] | null) ?? [];
@@ -430,7 +366,9 @@ export default async function DashboardPage() {
     currentWeekTimesheet
   });
 
-  const openRecentWeeks = recentTimesheetRows.filter((row) => row.status === "draft");
+  const previousDraftWeeksCount = recentTimesheetRows.filter(
+    (row) => row.status === "draft" && row.week_start < currentWeekStart
+  ).length;
   const currentStatusReportMap = new Map(
     ((currentStatusReports as StatusReportRow[] | null) ?? []).map((report) => [report.project_id, report])
   );
@@ -485,7 +423,8 @@ export default async function DashboardPage() {
     .map((project) => {
       const activePositions = (project.project_positions ?? []).filter(
         (position) =>
-          position.is_active && isDateRangeActiveForWeek(position.start_date, position.end_date, currentWeekStart)
+          position.is_active &&
+          isDateRangeActiveForWeek(position.start_date, position.end_date, currentWeekStart)
       );
       const unstaffedPositions = activePositions.filter((position) => {
         const hasActiveAssignment = (position.project_assignments ?? []).some((assignment) =>
@@ -525,18 +464,18 @@ export default async function DashboardPage() {
   const overcapacityProjectCount = leadershipSignals.filter(
     (signal) => signal.overcapacityAssignments > 0
   ).length;
+  const visibleSignalCount =
+    leadershipAttentionProjects.length + (currentWeekStatus.remainingHours > 0 ? 1 : 0);
 
   return (
     <AppFrame
       actions={
         <>
-          <Link className="profile-trigger" href="/profile">
-            <span className="profile-trigger-avatar">{initials}</span>
-            <span className="profile-trigger-copy">
-              <strong>Mein Profil</strong>
-              <span>{displayName}</span>
-            </span>
-          </Link>
+          <div className="topbar-chip-row">
+            <span className="topbar-chip">{currentWeekStatus.label}</span>
+            <span className="topbar-chip">{currentAssignmentRows.length} active assignments</span>
+            <span className="topbar-chip">{visibleSignalCount} open signals</span>
+          </div>
 
           <form action={logout}>
             <button className="cta cta-secondary" type="submit">
@@ -545,212 +484,276 @@ export default async function DashboardPage() {
           </form>
         </>
       }
+      contentClassName="app-content--fit-screen app-content--timesheet-blueprint app-content--blueprint-page"
       description="See your current week, staffing and project signals at a glance."
       eyebrow="Dashboard"
       navItems={navItems}
-      topbarClassName="app-topbar--compact"
-      title="Dashboard"
+      shellClassName="app-shell--fit-screen app-shell--timesheet-blueprint"
+      topbarClassName="app-topbar--compact app-topbar--timesheet-blueprint"
+      title={`Guten Morgen, ${firstName}`}
       userLabel={displayName}
     >
-      <section className="workspace-grid workspace-grid--three">
-        <article className="panel dashboard-card dashboard-profile-card">
-          <div className="dashboard-profile-top">
-            <span className="dashboard-avatar">{initials}</span>
-            <div>
-              <div className="card-kicker">Personal overview</div>
-              <h2>{displayName}</h2>
-              <p className="card-copy">
-                {roleLabel} · {formatWeekRange(currentWeekStart)}
-              </p>
-            </div>
-          </div>
-
-          <div className="summary-strip">
-            <div>
-              <span>Active staffing</span>
-              <strong>{currentAssignmentRows.length}</strong>
-            </div>
-            <div>
-              <span>Current week</span>
-              <strong>{currentWeekStatus.label}</strong>
-            </div>
-            <div>
-              <span>Managed projects</span>
-              <strong>{manageableProjects.length}</strong>
-            </div>
-            <div>
-              <span>Open signals</span>
-              <strong>{leadershipAttentionProjects.length + (currentWeekStatus.remainingHours > 0 ? 1 : 0)}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="panel dashboard-card">
-          <div className="dashboard-card-head">
-            <div>
-              <div className="card-kicker">My staffing</div>
-              <h2>Projects I am staffed on</h2>
-            </div>
-            <span className={`pill ${currentAssignmentRows.length ? "pill--good" : ""}`}>
-              {currentAssignmentRows.length} active
-            </span>
-          </div>
-
-          {currentAssignmentRows.length ? (
-            <div className="dashboard-list">
-              {currentAssignmentRows.map((row) => {
-                const assignment = row.project_assignments;
-
-                if (!assignment?.project_positions) {
-                  return null;
-                }
-
-                return (
-                  <Link
-                    className="dashboard-list-row"
-                    href={`/projects/${assignment.project_positions.project_id}`}
-                    key={assignment.id}
-                  >
-                    <div>
-                      <strong>{assignment.project_positions.projects?.name ?? "Unknown project"}</strong>
-                      <span>{assignment.project_positions.title}</span>
-                    </div>
-                    <div className="dashboard-row-side">
-                      <span className="tag">{formatHours(Number(row.assigned_hours))}</span>
-                      <span className="tag">
-                        {row.assigned_allocation_percent !== null
-                          ? `${Number(row.assigned_allocation_percent).toFixed(0)}%`
-                          : "planned"}
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="ok-box">No active project staffing is assigned for the current week.</div>
-          )}
-        </article>
-
-        <article className="panel dashboard-card">
-          <div className="dashboard-card-head">
-            <div>
-              <div className="card-kicker">My week</div>
-              <h2>Timesheet status</h2>
-            </div>
-            <span className={`pill ${currentWeekStatus.pillClassName}`}>{currentWeekStatus.label}</span>
-          </div>
-
-          <p className="card-copy">{currentWeekStatus.detail}</p>
-
-          <div className="summary-strip">
-            <div>
-              <span>Target</span>
-              <strong>{formatHours(currentWeekStatus.targetHours)}</strong>
-            </div>
-            <div>
-              <span>Captured</span>
-              <strong>{formatHours(currentWeekStatus.capturedHours)}</strong>
-            </div>
-          </div>
-
-          {currentWeekStatus.remainingHours > 0 ? (
-            <div className="warning-box">
-              <strong>{formatHours(currentWeekStatus.remainingHours)} still open</strong>
-              Capture the remaining time before you submit the current week.
-            </div>
-          ) : null}
-
-          {openRecentWeeks.filter((row) => row.week_start < currentWeekStart).length ? (
-            <div className="dashboard-inline-note">
-              {openRecentWeeks.filter((row) => row.week_start < currentWeekStart).length} previous week(s) still saved as draft.
-            </div>
-          ) : (
-            <div className="dashboard-inline-note is-good">No earlier draft week is waiting for submission.</div>
-          )}
-        </article>
-
-        <article className="panel dashboard-card dashboard-card--full">
-          <div className="dashboard-card-head">
-            <div>
-              <div className="card-kicker">Project leadership</div>
-              <h2>Responsibilities and signals</h2>
-            </div>
-            <span className={`pill ${leadershipAttentionProjects.length ? "pill--partial" : "pill--good"}`}>
-              {manageableProjects.length} project{manageableProjects.length === 1 ? "" : "s"}
-            </span>
-          </div>
-
-          {manageableProjects.length ? (
-            <>
-              <div className="summary-strip">
-                <div>
-                  <span>Missing reports</span>
-                  <strong>{missingReports}</strong>
-                </div>
-                <div>
-                  <span>Draft reports</span>
-                  <strong>{draftReports}</strong>
-                </div>
-                <div>
-                  <span>No positions</span>
-                  <strong>{projectsWithoutPositions}</strong>
-                </div>
-                <div>
-                  <span>Unstaffed positions</span>
-                  <strong>{totalUnstaffedPositions}</strong>
-                </div>
-                <div>
-                  <span>Overcapacity signals</span>
-                  <strong>{overcapacityProjectCount}</strong>
+      <BlueprintPage>
+        <SetupWorkspace>
+          <SetupSelectionPanel
+            action={
+              <Link className="cta cta-secondary" href="/profile">
+                Open profile
+              </Link>
+            }
+            subtitle={`${roleLabel} · ${formatWeekRange(currentWeekStart)}`}
+            title="My Workspace"
+          >
+            <article className="setup-entry-card dashboard-blueprint-profile-card">
+              <div className="dashboard-profile-top">
+                <span className="dashboard-avatar">{initials}</span>
+                <div className="setup-entry-copy">
+                  <strong>{displayName}</strong>
+                  <span>{user.email}</span>
                 </div>
               </div>
+            </article>
 
-              {leadershipAttentionProjects.length ? (
-                <div className="dashboard-list">
-                  {leadershipAttentionProjects.map((project) => (
-                    <Link className="dashboard-list-row" href={`/projects/${project.id}`} key={project.id}>
-                      <div>
-                        <strong>{project.name}</strong>
-                        <span>
-                          {[
-                            project.missingReport ? "status report missing" : null,
-                            project.draftReport ? "status report still draft" : null,
-                            project.withoutPositions ? "no planning positions captured" : null,
-                            project.unstaffedPositions > 0
-                              ? `${project.unstaffedPositions} unstaffed position(s)`
-                              : null,
-                            project.overcapacityAssignments > 0
-                              ? `${project.overcapacityAssignments} overcapacity signal(s)`
-                              : null
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
-                      </div>
-                      <div className="dashboard-row-side">
-                        {project.missingReport ? <span className="tag tag--focus">Report</span> : null}
-                        {project.unstaffedPositions > 0 ? (
-                          <span className="tag tag--focus">Staffing</span>
-                        ) : null}
-                        {project.overcapacityAssignments > 0 ? (
-                          <span className="tag tag--focus">Capacity</span>
-                        ) : null}
-                      </div>
-                    </Link>
-                  ))}
+            <div className="setup-entry-stack">
+              <Link className="setup-entry-card setup-entry-card--row" href="/timesheets">
+                <div className="setup-entry-copy">
+                  <strong>Timesheet</strong>
+                  <span>{currentWeekStatus.label} for the current week</span>
+                </div>
+                <span className="tag">{formatHours(currentWeekStatus.remainingHours)}</span>
+              </Link>
+
+              <Link className="setup-entry-card setup-entry-card--row" href="/people">
+                <div className="setup-entry-copy">
+                  <strong>People</strong>
+                  <span>Browse staffed colleagues and shared skills</span>
+                </div>
+                <span className="tag">{manageableProjects.length}</span>
+              </Link>
+            </div>
+
+            <div className="setup-impact-grid dashboard-blueprint-impact">
+              <article className="setup-entry-card setup-impact-card">
+                <div className="setup-impact-copy">
+                  <strong>Staffing</strong>
+                  <span>Assignments active this week</span>
+                </div>
+                <span className="pill">{currentAssignmentRows.length}</span>
+              </article>
+
+              <article className="setup-entry-card setup-impact-card">
+                <div className="setup-impact-copy">
+                  <strong>Signals</strong>
+                  <span>Open follow-up items</span>
+                </div>
+                <span className="pill">{visibleSignalCount}</span>
+              </article>
+            </div>
+          </SetupSelectionPanel>
+
+          <SetupDetailPanel
+            metrics={[
+              { label: "Current week", value: currentWeekStatus.label },
+              { label: "Staffed", value: currentAssignmentRows.length },
+              { label: "Managed projects", value: manageableProjects.length }
+            ]}
+            status={
+              <span className={`setup-state-chip ${visibleSignalCount ? "is-focus" : "is-good"}`}>
+                <span className="setup-state-chip-dot" />
+                {visibleSignalCount ? "Attention needed" : "Stable"}
+              </span>
+            }
+            subtitle="Weekly execution, staffing and leadership signals in one compact workspace."
+            title="Workspace Status"
+            titleLabel="Dashboard status"
+          >
+            <SetupSection label="My Staffing" meta={`${currentAssignmentRows.length} active`}>
+              {currentAssignmentRows.length ? (
+                <div className="setup-entry-stack">
+                  {currentAssignmentRows.map((row) => {
+                    const assignment = row.project_assignments;
+
+                    if (!assignment?.project_positions) {
+                      return null;
+                    }
+
+                    return (
+                      <Link
+                        className="setup-entry-card setup-entry-card--row"
+                        href={`/projects/${assignment.project_positions.project_id}`}
+                        key={assignment.id}
+                      >
+                        <div className="setup-entry-copy">
+                          <strong>{assignment.project_positions.projects?.name ?? "Unknown project"}</strong>
+                          <span>{assignment.project_positions.title}</span>
+                        </div>
+                        <div className="dashboard-row-side">
+                          <span className="tag">{formatHours(Number(row.assigned_hours))}</span>
+                          <span className="tag">
+                            {row.assigned_allocation_percent !== null
+                              ? `${Number(row.assigned_allocation_percent).toFixed(0)}%`
+                              : "planned"}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="ok-box">
-                  Your managed projects are currently up to date: no missing report, no unstaffed position and no visible overcapacity warning is open right now.
-                </div>
+                <article className="setup-entry-card setup-entry-card--empty">
+                  No active project staffing is assigned for the current week.
+                </article>
               )}
-            </>
-          ) : (
-            <div className="ok-box">No current project leadership responsibility is assigned to your user.</div>
-          )}
-        </article>
-      </section>
+            </SetupSection>
+
+            <SetupSection label="Timesheet Status" meta={formatWeekRange(currentWeekStart)}>
+              <div className="setup-impact-grid dashboard-blueprint-impact dashboard-blueprint-impact--three">
+                <article className="setup-entry-card setup-impact-card">
+                  <div className="setup-impact-copy">
+                    <strong>Target</strong>
+                    <span>Hours expected this week</span>
+                  </div>
+                  <span className="pill">{formatHours(currentWeekStatus.targetHours)}</span>
+                </article>
+
+                <article className="setup-entry-card setup-impact-card">
+                  <div className="setup-impact-copy">
+                    <strong>Captured</strong>
+                    <span>Time already booked</span>
+                  </div>
+                  <span className="pill">{formatHours(currentWeekStatus.capturedHours)}</span>
+                </article>
+
+                <article className="setup-entry-card setup-impact-card">
+                  <div className="setup-impact-copy">
+                    <strong>Remaining</strong>
+                    <span>Open time before submission</span>
+                  </div>
+                  <span className="pill">{formatHours(currentWeekStatus.remainingHours)}</span>
+                </article>
+              </div>
+
+              <article className="setup-entry-card">
+                <div className="setup-entry-copy">
+                  <strong>
+                    {currentWeekStatus.remainingHours > 0
+                      ? `${formatHours(currentWeekStatus.remainingHours)} still open`
+                      : "Current week is under control"}
+                  </strong>
+                  <span>{currentWeekStatus.detail}</span>
+                </div>
+              </article>
+
+              <article className="setup-entry-card">
+                <div className="setup-entry-copy">
+                  <strong>Previous draft weeks</strong>
+                  <span>
+                    {previousDraftWeeksCount
+                      ? `${previousDraftWeeksCount} earlier week(s) still saved as draft.`
+                      : "No earlier draft week is waiting for submission."}
+                  </span>
+                </div>
+              </article>
+            </SetupSection>
+
+            <SetupSection
+              label="Project Leadership"
+              meta={`${manageableProjects.length} project${manageableProjects.length === 1 ? "" : "s"}`}
+            >
+              {manageableProjects.length ? (
+                <>
+                  <div className="setup-impact-grid dashboard-blueprint-impact dashboard-blueprint-impact--wide">
+                    <article className="setup-entry-card setup-impact-card">
+                      <div className="setup-impact-copy">
+                        <strong>Missing reports</strong>
+                        <span>Status reports not submitted yet</span>
+                      </div>
+                      <span className="pill">{missingReports}</span>
+                    </article>
+
+                    <article className="setup-entry-card setup-impact-card">
+                      <div className="setup-impact-copy">
+                        <strong>Draft reports</strong>
+                        <span>Reports still in draft state</span>
+                      </div>
+                      <span className="pill">{draftReports}</span>
+                    </article>
+
+                    <article className="setup-entry-card setup-impact-card">
+                      <div className="setup-impact-copy">
+                        <strong>No positions</strong>
+                        <span>Projects without planning positions</span>
+                      </div>
+                      <span className="pill">{projectsWithoutPositions}</span>
+                    </article>
+
+                    <article className="setup-entry-card setup-impact-card">
+                      <div className="setup-impact-copy">
+                        <strong>Unstaffed positions</strong>
+                        <span>Open staffing gaps this week</span>
+                      </div>
+                      <span className="pill">{totalUnstaffedPositions}</span>
+                    </article>
+
+                    <article className="setup-entry-card setup-impact-card">
+                      <div className="setup-impact-copy">
+                        <strong>Overcapacity</strong>
+                        <span>Projects with allocation warnings</span>
+                      </div>
+                      <span className="pill">{overcapacityProjectCount}</span>
+                    </article>
+                  </div>
+
+                  {leadershipAttentionProjects.length ? (
+                    <div className="setup-entry-stack">
+                      {leadershipAttentionProjects.map((project) => (
+                        <Link
+                          className="setup-entry-card setup-entry-card--row"
+                          href={`/projects/${project.id}`}
+                          key={project.id}
+                        >
+                          <div className="setup-entry-copy">
+                            <strong>{project.name}</strong>
+                            <span>
+                              {[
+                                project.missingReport ? "status report missing" : null,
+                                project.draftReport ? "status report still draft" : null,
+                                project.withoutPositions ? "no planning positions captured" : null,
+                                project.unstaffedPositions > 0
+                                  ? `${project.unstaffedPositions} unstaffed position(s)`
+                                  : null,
+                                project.overcapacityAssignments > 0
+                                  ? `${project.overcapacityAssignments} overcapacity signal(s)`
+                                  : null
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          </div>
+                          <div className="dashboard-row-side">
+                            {project.missingReport ? <span className="tag tag--focus">Report</span> : null}
+                            {project.unstaffedPositions > 0 ? <span className="tag tag--focus">Staffing</span> : null}
+                            {project.overcapacityAssignments > 0 ? <span className="tag tag--focus">Capacity</span> : null}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <article className="setup-entry-card setup-entry-card--empty">
+                      Your managed projects are currently up to date: no missing report, no
+                      unstaffed position and no visible overcapacity warning is open right now.
+                    </article>
+                  )}
+                </>
+              ) : (
+                <article className="setup-entry-card setup-entry-card--empty">
+                  No current project leadership responsibility is assigned to your user.
+                </article>
+              )}
+            </SetupSection>
+          </SetupDetailPanel>
+        </SetupWorkspace>
+      </BlueprintPage>
     </AppFrame>
   );
 }

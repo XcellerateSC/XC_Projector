@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-const FULL_TIME_HOURS_PER_WEEK = 40;
+import { requireSignedInUser } from "@/lib/access";
+import {
+  FULL_TIME_HOURS_PER_WEEK,
+  normalizeWeekStartString
+} from "@/lib/work-week";
 const SUBMIT_TOLERANCE_HOURS = 0.01;
 
 type ParsedEntry = {
@@ -13,29 +15,6 @@ type ParsedEntry = {
   hours: number;
   description: string;
 };
-
-function normalizeWeekStart(date: Date) {
-  const copy = new Date(date);
-  const day = copy.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  copy.setUTCDate(copy.getUTCDate() + diff);
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-}
-
-function normalizeWeekStartString(value: string | null | undefined) {
-  if (!value) {
-    return normalizeWeekStart(new Date()).toISOString().slice(0, 10);
-  }
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return normalizeWeekStart(new Date()).toISOString().slice(0, 10);
-  }
-
-  return normalizeWeekStart(parsed).toISOString().slice(0, 10);
-}
 
 function redirectTimesheet(
   weekStart: string,
@@ -91,19 +70,14 @@ function parseEntries(
 }
 
 async function requireUser() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  return { supabase, userId: user.id };
+  return requireSignedInUser();
 }
 
-async function getTargetHours(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, userId: string, weekStart: string) {
+async function getTargetHours(
+  supabase: Awaited<ReturnType<typeof requireSignedInUser>>["supabase"],
+  userId: string,
+  weekStart: string
+) {
   const { data: capacityRows } = await supabase
     .from("employment_capacity_history")
     .select("capacity_percent, valid_from, valid_to")
@@ -118,7 +92,7 @@ async function getTargetHours(supabase: Awaited<ReturnType<typeof createSupabase
 }
 
 async function ensureDraftTimesheet(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: Awaited<ReturnType<typeof requireSignedInUser>>["supabase"],
   userId: string,
   weekStart: string,
   targetHours: number
@@ -164,7 +138,7 @@ async function ensureDraftTimesheet(
 }
 
 async function saveEntries(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: Awaited<ReturnType<typeof requireSignedInUser>>["supabase"],
   timesheetId: string,
   projectEntries: ParsedEntry[],
   internalEntries: ParsedEntry[]
