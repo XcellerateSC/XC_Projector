@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
+import { requireSignedInProfile } from "@/lib/access";
 import { AppFrame } from "@/components/app-frame";
+import { BlueprintPage } from "@/components/blueprint-page";
 import { formatProficiencyLabel } from "@/lib/skills";
 import { buildPrimaryNav } from "@/lib/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
   createAccessAssignment,
@@ -211,17 +211,9 @@ function buildSkillsByCategory(args: {
 
 export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   const { error, profile: selectedProfileParam, success } = await searchParams;
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const { profile: currentProfile, supabase, user } = await requireSignedInProfile();
 
   const [
-    { data: currentProfile },
     { data: profiles },
     { data: skillCategories },
     { data: skills },
@@ -232,11 +224,6 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
     { data: programs },
     { data: projects }
   ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, full_name, system_role")
-      .eq("id", user.id)
-      .maybeSingle(),
     supabase
       .from("profiles")
       .select(
@@ -436,7 +423,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
           ) : null}
         </div>
       }
-      contentClassName="app-content--fit-screen app-content--timesheet-blueprint"
+      contentClassName="app-content--fit-screen app-content--timesheet-blueprint app-content--blueprint-page"
       description="Select a consultant and manage profile, skills and access in one compact workspace."
       eyebrow="Consulting Roster"
       navItems={navItems}
@@ -445,36 +432,41 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
       topbarClassName="app-topbar--compact app-topbar--timesheet-blueprint"
       userLabel={currentProfile?.full_name ?? user.email}
     >
-      {error ? <p className="banner banner--error">{error}</p> : null}
-      {success ? <p className="banner banner--success">{success}</p> : null}
-
-      <section className="people-app">
-        <div className="people-shell">
-          <aside className="panel people-selection-panel">
-            <div className="people-selection-head">
-              <div className="people-selection-title">
+      <BlueprintPage
+        notices={
+          <>
+            {error ? <p className="banner banner--error">{error}</p> : null}
+            {success ? <p className="banner banner--success">{success}</p> : null}
+          </>
+        }
+      >
+        <section className="people-app">
+          <div className="setup-workspace people-shell">
+          <aside className="panel setup-selection-panel">
+            <div className="setup-selection-head">
+              <div className="setup-selection-title">
                 <span>People Selection</span>
                 <p>{orderedProfileRows.length} visible employees</p>
               </div>
             </div>
 
-            <div className="people-selection-list">
+            <div className="setup-selection-list">
               {orderedProfileRows.map((profile) => {
                 const skillCount = employeeSkillsByProfileId.get(profile.id)?.length ?? 0;
                 const accessCount = accessAssignmentsByProfileId.get(profile.id)?.length ?? 0;
 
                 return (
                   <Link
-                    className={`people-selection-link${
+                    className={`setup-selection-link${
                       selectedProfile?.id === profile.id ? " is-selected" : ""
                     }${profile.id === currentProfileId ? " is-current" : ""}`}
                     href={`/people?profile=${profile.id}`}
                     key={profile.id}
                     scroll={false}
                   >
-                    <span className="people-selection-indicator" />
+                    <span className="setup-selection-indicator" />
 
-                    <div className="people-selection-copy">
+                    <div className="setup-selection-copy">
                       <strong>{profile.full_name}</strong>
                       <span>
                         {formatProfileListMeta({
@@ -489,10 +481,10 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
 
                     <span
                       aria-hidden="true"
-                      className={`people-selection-dot ${
+                      className={`setup-selection-dot ${
                         profile.is_active
-                          ? "people-selection-dot--active"
-                          : "people-selection-dot--inactive"
+                          ? "setup-selection-dot--good"
+                          : "setup-selection-dot--muted"
                       }`}
                     />
                   </Link>
@@ -503,10 +495,10 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
 
           <div className="people-main">
             {selectedProfile ? (
-              <article className="panel people-detail-panel">
-                <header className="people-detail-header">
-                  <div className="people-detail-copy">
-                    <div className="people-status-title">
+              <article className="panel setup-detail-panel">
+                <header className="setup-detail-header">
+                  <div className="setup-detail-copy">
+                    <div className="setup-status-title">
                       <span>Profile Status</span>
                       <h2>{selectedProfile.full_name}</h2>
                       <p>
@@ -518,8 +510,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     </div>
                   </div>
 
-                  <div className="people-detail-head-side">
-                    <div className="people-status-strip">
+                  <div className="setup-detail-head-side">
+                    <div className="setup-status-strip">
                       <div>
                         <span>Role</span>
                         <strong>{formatRoleLabel(selectedProfile.system_role)}</strong>
@@ -538,7 +530,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                       </div>
                     </div>
 
-                    <div className="people-detail-actions">
+                    <div className="setup-detail-actions">
                       <span
                         className={`people-state-chip ${
                           selectedProfile.is_active ? "is-active" : "is-inactive"
@@ -554,9 +546,9 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                   </div>
                 </header>
 
-                <div className="people-detail-scroll">
+                <div className="setup-detail-scroll">
                   <section className="people-section">
-                    <div className="people-section-head">
+                    <div className="setup-section-head">
                       <strong>Profile</strong>
                       <span>Core identity and staffing context</span>
                     </div>
@@ -592,7 +584,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                   </section>
 
                   <section className="people-section">
-                    <div className="people-section-head">
+                    <div className="setup-section-head">
                       <strong>Skill Profile</strong>
                       <span>{selectedSkills.length} captured</span>
                     </div>
@@ -647,12 +639,12 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     )}
                   </section>
 
-                  {skillRows.length ? (
-                    <section className="people-section">
-                      <div className="people-section-head">
-                        <strong>Assign Skill</strong>
-                        <span>Category, catalog skill and proficiency</span>
-                      </div>
+                {skillRows.length ? (
+                  <section className="people-section">
+                    <div className="setup-section-head">
+                      <strong>Assign Skill</strong>
+                      <span>Category, catalog skill and proficiency</span>
+                    </div>
 
                       <article className="people-entry-card">
                         <form
@@ -677,12 +669,12 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     </section>
                   ) : null}
 
-                  {isPortfolioManager ? (
-                    <section className="people-section">
-                      <div className="people-section-head">
-                        <strong>Profile Admin</strong>
-                        <span>Role, status and profile metadata</span>
-                      </div>
+                {isPortfolioManager ? (
+                  <section className="people-section">
+                    <div className="setup-section-head">
+                      <strong>Profile Admin</strong>
+                      <span>Role, status and profile metadata</span>
+                    </div>
 
                       <article className="people-entry-card">
                         <form
@@ -780,12 +772,12 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     </section>
                   ) : null}
 
-                  {isPortfolioManager ? (
-                    <section className="people-section">
-                      <div className="people-section-head">
-                        <strong>Context Access</strong>
-                        <span>{selectedAccessAssignments.length} grants</span>
-                      </div>
+                {isPortfolioManager ? (
+                  <section className="people-section">
+                    <div className="setup-section-head">
+                      <strong>Context Access</strong>
+                      <span>{selectedAccessAssignments.length} grants</span>
+                    </div>
 
                       {selectedAccessAssignments.length ? (
                         <div className="people-entry-stack">
@@ -858,11 +850,11 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     </section>
                   ) : null}
 
-                  <section className="people-section">
-                    <div className="people-section-head">
-                      <strong>Skill Catalog</strong>
-                      <span>{skillRows.length} active skills</span>
-                    </div>
+                <section className="people-section">
+                  <div className="setup-section-head">
+                    <strong>Skill Catalog</strong>
+                    <span>{skillRows.length} active skills</span>
+                  </div>
 
                     {isPortfolioManager ? (
                       <article className="people-entry-card">
@@ -919,10 +911,10 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                 </div>
               </article>
             ) : (
-              <article className="panel people-detail-panel people-detail-panel--empty">
-                <div className="people-detail-scroll">
+              <article className="panel setup-detail-panel people-detail-panel--empty">
+                <div className="setup-detail-scroll">
                   <section className="people-section">
-                    <div className="people-section-head">
+                    <div className="setup-section-head">
                       <strong>People</strong>
                       <span>No visible employee found</span>
                     </div>
@@ -936,8 +928,9 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               </article>
             )}
           </div>
-        </div>
-      </section>
+          </div>
+        </section>
+      </BlueprintPage>
     </AppFrame>
   );
 }

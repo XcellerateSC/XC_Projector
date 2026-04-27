@@ -7,9 +7,18 @@ import {
   getRequirementWeight,
   type SkillRequirementLevel
 } from "@/lib/skills";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getProjectAccessContext } from "@/lib/access";
+import {
+  FULL_TIME_HOURS_PER_WEEK,
+  isoDateString,
+  normalizeWeekStart,
+  normalizeWeekStartString,
+  shiftIsoDate
+} from "@/lib/work-week";
 
-const FULL_TIME_HOURS_PER_WEEK = 40;
+type ProjectMutationContext = NonNullable<
+  Awaited<ReturnType<typeof getProjectAccessContext>>
+>;
 
 function redirectProject(
   projectId: string,
@@ -28,7 +37,8 @@ function redirectProject(
     }
   }
 
-  redirect(`/projects/${projectId}?${params.toString()}`);
+  params.set("project", projectId);
+  redirect(`/projects?${params.toString()}`);
 }
 
 function readRequiredText(formData: FormData, key: string, label: string) {
@@ -77,32 +87,12 @@ function calculateAllocationPercent(hoursPerWeek: number) {
   return Number(((hoursPerWeek / FULL_TIME_HOURS_PER_WEEK) * 100).toFixed(2));
 }
 
-function normalizeWeekStart(date: Date) {
-  const copy = new Date(date);
-  const day = copy.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  copy.setUTCDate(copy.getUTCDate() + diff);
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-}
-
-function normalizeWeekStartString(value: string | null | undefined) {
-  if (!value) {
-    return normalizeWeekStart(new Date()).toISOString().slice(0, 10);
-  }
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error("Week start must be a valid date.");
-  }
-
-  return normalizeWeekStart(parsed).toISOString().slice(0, 10);
-}
-
 function readRequiredWeekStart(formData: FormData, key: string, label: string) {
   const value = readRequiredText(formData, key, label);
-  return normalizeWeekStartString(value);
+  return normalizeWeekStartString(value, {
+    invalidMessage: "Week start must be a valid date.",
+    strict: true
+  });
 }
 
 function readStatusRating(formData: FormData, key: string, label: string) {
@@ -190,18 +180,8 @@ function generateWeekStarts(startDate: string, endDate: string | null) {
   return weeks;
 }
 
-function isoDateString(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function shiftIsoDate(value: string, amount: number) {
-  const next = new Date(`${value}T00:00:00.000Z`);
-  next.setUTCDate(next.getUTCDate() + amount);
-  return isoDateString(next);
-}
-
 async function replacePositionWeeks(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: ProjectMutationContext["supabase"],
   positionId: string,
   startDate: string,
   endDate: string | null,
@@ -238,7 +218,7 @@ async function replacePositionWeeks(
 }
 
 async function replaceAssignmentWeeks(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: ProjectMutationContext["supabase"],
   assignmentId: string,
   assignedFrom: string,
   assignedTo: string | null,
@@ -274,34 +254,35 @@ async function replaceAssignmentWeeks(
   }
 }
 
-async function ensureProjectAccess(projectId: string) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+async function ensureProjectViewAccess(projectId: string) {
+  const context = await getProjectAccessContext(projectId);
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  const { data: project, error } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("id", projectId)
-    .single();
-
-  if (error || !project) {
+  if (!context?.project) {
     redirect("/projects");
   }
 
-  return { supabase, userId: user.id };
+  if (!context.canView) {
+    throw new Error("You do not have access to this project.");
+  }
+
+  return context;
+}
+
+async function ensureProjectManageAccess(projectId: string) {
+  const context = await ensureProjectViewAccess(projectId);
+
+  if (!context.canManage) {
+    throw new Error("You do not have permission to manage this project.");
+  }
+
+  return context;
 }
 
 export async function updateProjectWorkspace(formData: FormData) {
   const projectId = readRequiredText(formData, "project_id", "Project");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const portfolioId = readRequiredText(formData, "portfolio_id", "Portfolio");
     const customerId = readRequiredText(formData, "customer_id", "Customer");
     const name = readRequiredText(formData, "name", "Project name");
@@ -386,7 +367,7 @@ export async function setProjectLifecycleStatus(formData: FormData) {
   const projectId = readRequiredText(formData, "project_id", "Project");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const lifecycleStatus = readLifecycleStatus(
       formData,
       "lifecycle_status",
@@ -422,7 +403,7 @@ export async function createProjectPosition(formData: FormData) {
   let title = "Position";
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const positionId = crypto.randomUUID();
     title = readRequiredText(formData, "title", "Position title");
     const professionalGradeId = readRequiredText(
@@ -475,7 +456,7 @@ export async function updateProjectPosition(formData: FormData) {
   const positionId = readRequiredText(formData, "position_id", "Position");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const title = readRequiredText(formData, "title", "Position title");
     const professionalGradeId = readRequiredText(
       formData,
@@ -526,7 +507,7 @@ export async function setProjectPositionActiveState(formData: FormData) {
   const positionId = readRequiredText(formData, "position_id", "Position");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const isActive = readBooleanString(formData, "next_is_active", "Position state");
 
     const { error } = await supabase
@@ -557,7 +538,7 @@ export async function createProjectAssignment(formData: FormData) {
   const projectId = readRequiredText(formData, "project_id", "Project");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const assignmentId = crypto.randomUUID();
     const projectPositionId = readRequiredText(formData, "project_position_id", "Position");
     const profileId = readRequiredText(formData, "profile_id", "Employee");
@@ -610,7 +591,7 @@ export async function updateProjectAssignment(formData: FormData) {
   const assignmentId = readRequiredText(formData, "assignment_id", "Assignment");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const assignedFrom = readRequiredText(formData, "assigned_from", "Assigned from");
     const assignedTo = readOptionalText(formData, "assigned_to");
     const assignedHours = readRequiredNumber(formData, "assigned_hours", "Assigned hours per week");
@@ -649,7 +630,7 @@ export async function reassignProjectAssignment(formData: FormData) {
   const assignmentId = readRequiredText(formData, "assignment_id", "Assignment");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const newProfileId = readRequiredText(formData, "new_profile_id", "New employee");
     const reassignFrom = readRequiredWeekStart(formData, "reassign_from", "Reassign from");
     const newAssignedTo = readOptionalText(formData, "new_assigned_to");
@@ -760,7 +741,7 @@ export async function endProjectAssignment(formData: FormData) {
   const assignmentId = readRequiredText(formData, "assignment_id", "Assignment");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const currentWeekStart = isoDateString(normalizeWeekStart(new Date()));
     const { data: assignment, error: assignmentError } = await supabase
       .from("project_assignments")
@@ -823,7 +804,7 @@ export async function saveBillingOverride(formData: FormData) {
   const projectId = readRequiredText(formData, "project_id", "Project");
 
   try {
-    const { supabase, userId } = await ensureProjectAccess(projectId);
+    const { supabase, userId } = await ensureProjectManageAccess(projectId);
     const timeEntryId = readRequiredText(formData, "time_entry_id", "Time entry");
     const overrideHours = readRequiredNumber(formData, "override_hours", "Override hours");
     const reason = readOptionalText(formData, "reason");
@@ -879,7 +860,7 @@ export async function removeBillingOverride(formData: FormData) {
   const projectId = readRequiredText(formData, "project_id", "Project");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const billingOverrideId = readRequiredText(
       formData,
       "billing_override_id",
@@ -911,7 +892,7 @@ export async function savePositionSkillRequirement(formData: FormData) {
   const projectId = readRequiredText(formData, "project_id", "Project");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const projectPositionId = readRequiredText(formData, "project_position_id", "Position");
     const skillId = readRequiredText(formData, "skill_id", "Skill");
     const requirementLevel = readSkillRequirementLevel(
@@ -974,7 +955,7 @@ export async function removePositionSkillRequirement(formData: FormData) {
   const projectId = readRequiredText(formData, "project_id", "Project");
 
   try {
-    const { supabase } = await ensureProjectAccess(projectId);
+    const { supabase } = await ensureProjectManageAccess(projectId);
     const requirementId = readRequiredText(formData, "requirement_id", "Skill requirement");
 
     const { error } = await supabase
@@ -1005,7 +986,7 @@ async function saveStatusReportInternal(formData: FormData, finalize: boolean) {
   let successMessage = "Status report draft saved.";
 
   try {
-    const { supabase, userId } = await ensureProjectAccess(projectId);
+    const { supabase, userId } = await ensureProjectManageAccess(projectId);
     const overallProgressPercent = readProgressStep(
       formData,
       "overall_progress_percent",
@@ -1097,7 +1078,7 @@ export async function addStatusReportComment(formData: FormData) {
   const reportWeek = normalizeWeekStartString(readOptionalText(formData, "report_week_start"));
 
   try {
-    const { supabase, userId } = await ensureProjectAccess(projectId);
+    const { supabase, userId } = await ensureProjectViewAccess(projectId);
     const statusReportId = readRequiredText(formData, "status_report_id", "Status report");
     const body = readRequiredText(formData, "body", "Comment");
 

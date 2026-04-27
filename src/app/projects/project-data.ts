@@ -99,7 +99,9 @@ export function formatProjectBudget(financials: ProjectListRow["project_financia
   }).format(financials.declared_budget);
 }
 
-export async function loadProjectsWorkspace(): Promise<ProjectsWorkspace> {
+export async function loadProjectsWorkspace(
+  activeNavKey: Parameters<typeof buildPrimaryNav>[0] = "projects"
+): Promise<ProjectsWorkspace> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }
@@ -187,7 +189,7 @@ export async function loadProjectsWorkspace(): Promise<ProjectsWorkspace> {
     customerRows: (customers as CustomerRow[] | null) ?? [],
     isPortfolioManager: profile?.system_role === "portfolio_manager",
     leadRows: (projectLeads as ProjectLeadRow[] | null) ?? [],
-    navItems: buildPrimaryNav("projects"),
+    navItems: buildPrimaryNav(activeNavKey),
     portfolioRows: (portfolios as PortfolioRow[] | null) ?? [],
     profile: (profile as ProfileSummary | null) ?? null,
     programRows: (programs as ProgramRow[] | null) ?? [],

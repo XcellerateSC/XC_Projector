@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AppFrame } from "@/components/app-frame";
+import { BlueprintPage } from "@/components/blueprint-page";
 
 type ProjectsSectionKey =
   | "overview"
@@ -39,9 +40,9 @@ type ProjectsShellProps = {
 
 const managerSections = [
   { href: "/projects", key: "overview", label: "Project overview" },
-  { href: "/projects/portfolios", key: "portfolios", label: "Portfolios" },
-  { href: "/projects/programs", key: "programs", label: "Programs" },
-  { href: "/projects/customers", key: "customers", label: "Customers" }
+  { href: "/portfolios", key: "portfolios", label: "Portfolios" },
+  { href: "/programs", key: "programs", label: "Programs" },
+  { href: "/customers", key: "customers", label: "Customers" }
 ] satisfies ProjectsSectionItem[];
 
 export function ProjectsShell({
@@ -76,7 +77,7 @@ export function ProjectsShell({
           <span className="topbar-chip">{counts.customers} customers</span>
         </div>
       }
-      contentClassName="app-content--fit-screen app-content--timesheet-blueprint"
+      contentClassName="app-content--fit-screen app-content--timesheet-blueprint app-content--blueprint-page"
       description={description}
       eyebrow={eyebrow}
       navItems={navItems}
@@ -89,27 +90,34 @@ export function ProjectsShell({
       title={title}
       userLabel={userLabel}
     >
-      {error ? <p className="banner banner--error">{error}</p> : null}
-      {success ? <p className="banner banner--success">{success}</p> : null}
-
-      {showSectionNav && sections.length > 1 ? (
-        <nav
-          aria-label="Projects sections"
-          className={`section-nav panel${compactChrome ? " section-nav--compact" : ""}`}
-        >
-          {sections.map((section) => (
-            <Link
-              className={`section-nav-item${section.key === activeSection ? " is-active" : ""}`}
-              href={section.href}
-              key={section.href}
+      <BlueprintPage
+        notices={
+          <>
+            {error ? <p className="banner banner--error">{error}</p> : null}
+            {success ? <p className="banner banner--success">{success}</p> : null}
+          </>
+        }
+        top={
+          showSectionNav && sections.length > 1 ? (
+            <nav
+              aria-label="Projects sections"
+              className={`section-nav panel${compactChrome ? " section-nav--compact" : ""}`}
             >
-              {section.label}
-            </Link>
-          ))}
-        </nav>
-      ) : null}
-
-      {children}
+              {sections.map((section) => (
+                <Link
+                  className={`section-nav-item${section.key === activeSection ? " is-active" : ""}`}
+                  href={section.href}
+                  key={section.href}
+                >
+                  {section.label}
+                </Link>
+              ))}
+            </nav>
+          ) : null
+        }
+      >
+        {children}
+      </BlueprintPage>
     </AppFrame>
   );
 }

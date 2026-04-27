@@ -633,6 +633,13 @@ Recommended logical split:
 - Keep denormalized summary fields minimal and derived where possible.
 - Treat rates, budgets, and overrides as auditable business data.
 
+### Suggested UI design principles
+
+- Prefer vertically compact layouts so primary workspaces stay visible within a single viewport whenever possible.
+- Use horizontal space actively before adding vertical stacking, especially for overview rows, summaries, status signals, and workspace navigation.
+- Separate compact scan views from detailed edit views so overview pages remain fast to read and detail pages can still support full editing.
+- Keep cards and rows information-dense but calm: short labels, strong hierarchy, clear actions, and minimal decorative height.
+
 ## Suggested Supabase schema outline
 
 ### Identity and access

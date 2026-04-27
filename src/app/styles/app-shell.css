@@ -118,11 +118,10 @@
 .app-rail-footer {
   margin-top: auto;
   display: grid;
-  gap: 4px;
+  gap: 8px;
   padding: 12px 8px 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.82);
-  text-align: center;
 }
 
 .app-rail-caption {
@@ -130,6 +129,65 @@
   color: rgba(255, 255, 255, 0.58);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.app-profile-link {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 8px 6px 6px;
+  border-radius: 14px;
+  color: rgba(255, 255, 255, 0.92);
+  transition:
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.app-profile-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.app-profile-avatar {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  overflow: hidden;
+}
+
+.app-profile-avatar-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.app-profile-copy {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+}
+
+.app-profile-copy strong {
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
+.app-profile-copy span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.68rem;
 }
 
 .app-main {
@@ -215,6 +273,22 @@
 
 .app-shell--timesheet-blueprint .app-rail-footer {
   padding: 14px 8px 16px;
+}
+
+.app-shell--timesheet-blueprint .app-profile-link {
+  gap: 6px;
+  padding: 8px 4px 4px;
+}
+
+.app-shell--timesheet-blueprint .app-profile-avatar {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.app-shell--timesheet-blueprint .app-profile-copy strong {
+  font-size: 0.72rem;
 }
 
 .app-topbar {
@@ -404,6 +478,7 @@
 
 .app-content {
   display: grid;
+  align-content: start;
   gap: 14px;
   min-height: 0;
 }
@@ -416,6 +491,16 @@
 
 .app-content--timesheet-blueprint {
   padding: 0 6px 8px 0;
+}
+
+.app-content--blueprint-page {
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+}
+
+.app-content--blueprint-page > * {
+  min-height: 0;
+  height: 100%;
 }
 
 .app-content > * {
@@ -475,6 +560,26 @@
   background: linear-gradient(135deg, rgba(11, 100, 132, 0.12), rgba(8, 72, 97, 0.18));
   border-color: rgba(5, 83, 115, 0.2);
   color: var(--accent-deep);
+}
+
+.blueprint-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  height: 100%;
+}
+
+.blueprint-page-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.blueprint-page-main > * {
+  min-width: 0;
 }
 
 .workspace-grid {

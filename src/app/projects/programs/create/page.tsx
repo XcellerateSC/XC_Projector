@@ -22,12 +22,12 @@ export default async function ProgramCreatePage({
   searchParams
 }: ProgramCreatePageProps) {
   const { error, success } = await searchParams;
-  const workspace = await loadProjectsWorkspace("portfolio");
+  const workspace = await loadProjectsWorkspace("programs");
 
   return (
     <ProjectsShell
       activeSection="programs"
-      eyebrow="Portfolios & Programs"
+      eyebrow="Programs"
       compactChrome
       counts={{
         customers: workspace.customerRows.length,
@@ -39,10 +39,7 @@ export default async function ProgramCreatePage({
       error={error}
       isPortfolioManager={workspace.isPortfolioManager}
       navItems={workspace.navItems}
-      sectionItems={[
-        { href: "/projects/portfolios", key: "portfolios", label: "Portfolios" },
-        { href: "/projects/programs", key: "programs", label: "Programs" }
-      ]}
+      showSectionNav={false}
       success={success}
       title="Create Program"
       userLabel={workspace.userLabel}
@@ -60,7 +57,7 @@ export default async function ProgramCreatePage({
 
               return (
                 <SetupSelectionLink
-                  href={`/projects/programs/${program.id}`}
+                  href={`/programs/${program.id}`}
                   key={program.id}
                   subtitle={`${portfolioName}${program.code ? ` · ${program.code}` : ""}`}
                   title={program.name}
@@ -94,7 +91,7 @@ export default async function ProgramCreatePage({
             <article className="setup-entry-card">
               {workspace.isPortfolioManager ? (
                 <form action={createProgram} className="setup-form-grid setup-form-grid--program">
-                  <input name="redirect_to" type="hidden" value="/projects/programs/create" />
+                  <input name="redirect_to" type="hidden" value="/programs/create" />
                   <label className="field">
                     <span>Portfolio</span>
                     <select name="portfolio_id" required>
@@ -148,7 +145,7 @@ export default async function ProgramCreatePage({
                           {program.code ? ` · ${program.code}` : ""}
                         </span>
                       </div>
-                      <Link className="cta cta-secondary" href={`/projects/programs/${program.id}`}>
+                      <Link className="cta cta-secondary" href={`/programs/${program.id}`}>
                         Open
                       </Link>
                     </article>

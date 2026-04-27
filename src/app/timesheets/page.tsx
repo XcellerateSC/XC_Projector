@@ -1,9 +1,18 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
+import { requireSignedInProfile } from "@/lib/access";
 import { AppFrame } from "@/components/app-frame";
+import { BlueprintPage } from "@/components/blueprint-page";
 import { buildPrimaryNav } from "@/lib/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  FULL_TIME_HOURS_PER_WEEK,
+  formatWeekRange,
+  getIsoWeekNumber,
+  getIsoWeekYear,
+  getIsoWeeksInYear,
+  getWeekStartForIsoWeek,
+  normalizeWeekStart
+} from "@/lib/work-week";
 
 import { saveTimesheetDraft, submitWeeklyTimesheet } from "./actions";
 
@@ -66,32 +75,6 @@ type WeekListEntry = {
   weekStart: string;
 };
 
-const FULL_TIME_HOURS_PER_WEEK = 40;
-
-function normalizeWeekStart(date: Date) {
-  const copy = new Date(date);
-  const day = copy.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  copy.setUTCDate(copy.getUTCDate() + diff);
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-}
-
-function formatWeekRange(weekStart: string) {
-  const start = new Date(`${weekStart}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 4);
-
-  return `${new Intl.DateTimeFormat("de-CH", {
-    day: "2-digit",
-    month: "2-digit"
-  }).format(start)} - ${new Intl.DateTimeFormat("de-CH", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(end)}`;
-}
-
 function formatHours(value: number) {
   return `${value.toFixed(2)}h`;
 }
@@ -106,42 +89,6 @@ function formatPercent(value: number | null) {
 
 function formatWeekLabel(weekStart: string) {
   return `KW ${String(getIsoWeekNumber(weekStart)).padStart(2, "0")}`;
-}
-
-function getIsoWeekData(value: string | Date) {
-  const source =
-    typeof value === "string" ? new Date(`${value}T00:00:00.000Z`) : new Date(value);
-  const target = new Date(
-    Date.UTC(source.getUTCFullYear(), source.getUTCMonth(), source.getUTCDate())
-  );
-  const dayNumber = target.getUTCDay() || 7;
-  target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
-  const isoYear = target.getUTCFullYear();
-  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
-  const isoWeek = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-
-  return { isoWeek, isoYear };
-}
-
-function getIsoWeekNumber(weekStart: string) {
-  return getIsoWeekData(weekStart).isoWeek;
-}
-
-function getIsoWeekYear(weekStart: string) {
-  return getIsoWeekData(weekStart).isoYear;
-}
-
-function getWeekStartForIsoWeek(isoYear: number, isoWeek: number) {
-  const januaryFourth = new Date(Date.UTC(isoYear, 0, 4));
-  const januaryFourthDay = januaryFourth.getUTCDay() || 7;
-  const firstWeekMonday = new Date(januaryFourth);
-  firstWeekMonday.setUTCDate(januaryFourth.getUTCDate() - januaryFourthDay + 1);
-  firstWeekMonday.setUTCDate(firstWeekMonday.getUTCDate() + (isoWeek - 1) * 7);
-  return firstWeekMonday.toISOString().slice(0, 10);
-}
-
-function getIsoWeeksInYear(isoYear: number) {
-  return getIsoWeekData(new Date(Date.UTC(isoYear, 11, 28))).isoWeek;
 }
 
 function normalizeSelectedYear(value: string | undefined, fallbackYear: number) {
@@ -221,28 +168,15 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
   });
   const weekListStart = getWeekStartForIsoWeek(selectedYear, 1);
   const weekListEnd = getWeekStartForIsoWeek(selectedYear, getIsoWeeksInYear(selectedYear));
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const { profile, supabase, user } = await requireSignedInProfile();
 
   const [
-    { data: profile },
     { data: timesheet },
     { data: assignmentWeeks },
     { data: internalTypes },
     { data: capacityRows },
     { data: visibleTimesheets }
   ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name, system_role")
-      .eq("id", user.id)
-      .maybeSingle(),
     supabase
       .from("weekly_timesheets")
       .select("id, target_hours, status, submitted_at, time_entries(*)")
@@ -331,13 +265,13 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
       : canSubmit
         ? "Ready to submit"
         : "Open";
-  const timesheetStateClassName = isSubmitted
-    ? "is-submitted"
+  const blueprintStateClassName = isSubmitted
+    ? "is-good"
     : isFutureWeek
-      ? "is-future"
+      ? "is-muted"
       : canSubmit
-        ? "is-ready"
-        : "is-open";
+        ? "is-focus"
+        : "is-muted";
 
   return (
     <AppFrame
@@ -348,7 +282,7 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
           <span className="topbar-chip">{internalAccountRows.length} internal accounts</span>
         </div>
       }
-      contentClassName="app-content--fit-screen app-content--timesheet-blueprint"
+      contentClassName="app-content--fit-screen app-content--timesheet-blueprint app-content--blueprint-page"
       description="Select a week and capture time in one compact workspace."
       eyebrow="Weekly timesheets"
       navItems={navItems}
@@ -357,15 +291,21 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
       topbarClassName="app-topbar--compact app-topbar--timesheet-blueprint"
       userLabel={profile?.full_name ?? user.email}
     >
-      {error ? <p className="banner banner--error">{error}</p> : null}
-      {success ? <p className="banner banner--success">{success}</p> : null}
-
-      <section className="timesheet-app">
-        <section className="workspace-grid workspace-grid--project timesheet-shell">
-          <aside className="panel timesheet-week-panel">
-            <div className="timesheet-week-panel-head">
-              <div className="card-kicker">Week selection</div>
-              <form className="timesheet-year-form">
+      <BlueprintPage
+        notices={
+          <>
+            {error ? <p className="banner banner--error">{error}</p> : null}
+            {success ? <p className="banner banner--success">{success}</p> : null}
+          </>
+        }
+      >
+        <section className="timesheet-app">
+          <section className="setup-workspace timesheet-shell">
+          <aside className="panel setup-selection-panel">
+            <div className="setup-selection-head">
+              <div className="setup-selection-title">
+                <span>Week selection</span>
+                <form className="timesheet-year-form">
                 <select aria-label="Year" defaultValue={String(selectedYear)} name="year">
                   {yearOptions.map((optionYear) => (
                     <option key={optionYear} value={optionYear}>
@@ -380,43 +320,52 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
               <div aria-hidden="true" className="timesheet-week-panel-subline">
                 {formatWeekRange(selectedWeekStart)}
               </div>
+              </div>
             </div>
 
-            <div className="timesheet-week-list">
+            <div className="setup-selection-list">
               {weekSelection.map((weekEntry) => (
                 <Link
-                  className={`timesheet-week-link${
+                  className={`setup-selection-link${
                     weekEntry.isSelected ? " is-selected" : ""
-                  }${weekEntry.isCurrentWeek ? " is-current" : ""}`}
+                  }`}
                   href={`/timesheets?year=${selectedYear}&week=${weekEntry.weekStart}`}
                   key={weekEntry.weekStart}
                 >
-                  <span aria-hidden="true" className="timesheet-week-indicator" />
-                  <div className="timesheet-week-copy">
+                  <span aria-hidden="true" className="setup-selection-indicator" />
+                  <div className="setup-selection-copy">
                     <strong>{weekEntry.label}</strong>
                     <span>{weekEntry.rangeLabel}</span>
                   </div>
 
-                  <span className={`timesheet-week-dot timesheet-week-dot--${weekEntry.status}`} />
+                  <span
+                    className={`setup-selection-dot setup-selection-dot--${
+                      weekEntry.status === "submitted"
+                        ? "good"
+                        : weekEntry.status === "draft"
+                          ? "warn"
+                          : "neutral"
+                    }`}
+                  />
                 </Link>
               ))}
             </div>
           </aside>
 
-          <form className="panel timesheet-detail-panel" key={selectedWeekStart}>
+          <form className="panel setup-detail-panel" key={selectedWeekStart}>
             <input name="week_start" type="hidden" value={selectedWeekStart} />
 
-            <header className="timesheet-detail-header">
-              <div className="timesheet-detail-copy">
-                <div className="card-kicker">Week status</div>
-                <div className="timesheet-status-title">
+            <header className="setup-detail-header">
+              <div className="setup-detail-copy">
+                <div className="setup-status-title">
+                  <span>Week status</span>
                   <h2>{formatWeekLabel(selectedWeekStart)}</h2>
                   <p>{formatWeekRange(selectedWeekStart)}</p>
                 </div>
               </div>
 
-              <div className="timesheet-detail-head-side">
-                <div className="timesheet-status-strip">
+              <div className="setup-detail-head-side">
+                <div className="setup-status-strip">
                   <div>
                     <span>Captured</span>
                     <strong>{formatHours(capturedHours)}</strong>
@@ -431,9 +380,9 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
                   </div>
                 </div>
 
-                <div className="timesheet-detail-actions">
-                  <span className={`timesheet-state-chip ${timesheetStateClassName}`}>
-                    <span className="timesheet-state-chip-dot" />
+                <div className="setup-detail-actions">
+                  <span className={`setup-state-chip ${blueprintStateClassName}`}>
+                    <span className="setup-state-chip-dot" />
                     {timesheetStateLabel}
                   </span>
 
@@ -459,7 +408,7 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
               </div>
             </header>
 
-            <div className="timesheet-detail-scroll">
+            <div className="setup-detail-scroll">
               {!isSubmitted && !isFutureWeek && remainingHours > 0 ? (
                 <div className="warning-box timesheet-inline-note">
                   <strong>{formatHours(remainingDisplayHours)} open.</strong>
@@ -474,7 +423,7 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
               ) : null}
 
               <section className="timesheet-content-card">
-                <div className="timesheet-subsection-head">
+                <div className="setup-section-head">
                   <strong>Project time</strong>
                   <span>{assignmentRows.length} active</span>
                 </div>
@@ -544,7 +493,7 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
               </section>
 
               <section className="timesheet-content-card">
-                <div className="timesheet-subsection-head">
+                <div className="setup-section-head">
                   <strong>Internal time</strong>
                   <span>{internalAccountRows.length} available</span>
                 </div>
@@ -602,8 +551,9 @@ export default async function TimesheetsPage({ searchParams }: TimesheetsPagePro
               </section>
             </div>
           </form>
+          </section>
         </section>
-      </section>
+      </BlueprintPage>
     </AppFrame>
   );
 }
